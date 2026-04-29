@@ -1,0 +1,158 @@
+[
+  {
+    "indicator_name": "固定長期適合率",
+    "value_kind": "current",
+    "value_label": "當期值",
+    "current_display": "0.55倍",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "非流動資產",
+        "display": "NTD 924,470仟元"
+      },
+      {
+        "period": "當期",
+        "name": "其他非流動資產",
+        "display": "NTD 4,084仟元"
+      },
+      {
+        "period": "當期",
+        "name": "權益總額",
+        "display": "NTD 1,099,433仟元"
+      },
+      {
+        "period": "當期",
+        "name": "非流動負債",
+        "display": "NTD 571,743仟元"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  },
+  {
+    "indicator_name": "",
+    "value_kind": "current",
+    "value_label": "當期值",
+    "current_display": "NTD 1,099,433仟元",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "權益總額",
+        "display": "NTD 1,099,433仟元"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  },
+  {
+    "indicator_name": "",
+    "value_kind": "current",
+    "value_label": "當期值",
+    "current_display": "NTD 1,085,182仟元",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "權益總額",
+        "display": "NTD 1,099,433仟元"
+      },
+      {
+        "period": "當期",
+        "name": "股本",
+        "display": "NTD 28,501仟元"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  },
+  {
+    "indicator_name": "負債權益比",
+    "value_kind": "current",
+    "value_label": "當期值",
+    "current_display": "2.75%",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "負債總額/權益總額",
+        "display": "2.75%"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  },
+  {
+    "indicator_name": "負債權益比",
+    "value_kind": "period_change_abs",
+    "value_label": "較前期之變動",
+    "current_display": "0.02%",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "負債總額/權益總額",
+        "display": "2.75%"
+      },
+      {
+        "period": "前期",
+        "name": "負債總額/權益總額",
+        "display": "2.73%"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  },
+  {
+    "indicator_name": "銀借淨值比",
+    "value_kind": "current",
+    "value_label": "當期值",
+    "current_display": "2.06%",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "(銀行借款+短期票券+公司債)/權益總額",
+        "display": "2.06%"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  },
+  {
+    "indicator_name": "銀借淨值比",
+    "value_kind": "period_change_abs",
+    "value_label": "較前期之變動",
+    "current_display": "0.20%",
+    "operands": [
+      {
+        "period": "當期",
+        "name": "(銀行借款+短期票券+公司債)/權益總額",
+        "display": "2.06%"
+      },
+      {
+        "period": "前期",
+        "name": "(銀行借款+短期票券+公司債)/權益總額",
+        "display": "1.86%"
+      }
+    ],
+    "taggings": [
+      {
+        "status": "not_triggered"
+      }
+    ]
+  }
+]

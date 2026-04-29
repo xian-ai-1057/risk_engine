@@ -1,0 +1,5 @@
+請根據以下財務數據 JSON，產出各段的財報敘事。
+
+<financial_data>
+{{JSON_DATA}}
+</financial_data>
