@@ -509,7 +509,7 @@ flowchart LR
     UF -->|%| F2["format_percent<br/>12.93%"]
     UF -->|天| F3["format_days<br/>85.44天"]
     UF -->|倍| F4["format_times<br/>0.55倍"]
-    RR["ReportRow<br/>(Current / Period_2 / Period_3)"] -->|convert_grouped_report<br/>period_dates=[...]| GR["{section: {code: {<br/>FA_CANME, 趨勢,<br/>'MM/DD/YYYY': '顯示值'}}}"]
+    RR["ReportRow<br/>(Current / Period_2 / Period_3)"] -->|"convert_grouped_report(period_dates)"| GR["{section: {code: {<br/>FA_CANME, 趨勢,<br/>'MM/DD/YYYY': '顯示值'}}}"]
     GR --> T["_calc_trend<br/>±5% 為 up/down，否則 flat<br/>組合為『逐期上升 / 大致持平 /<br/>呈先升後降走勢』"]
 ```
 
