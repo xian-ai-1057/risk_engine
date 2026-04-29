@@ -230,6 +230,52 @@ def load_csv(csv_path: str) -> list[dict[str, str]]:
         raise
 
 
+def row_to_rule(
+    row: dict[str, str],
+) -> tuple[list[str], dict[str, Any]]:
+    """將單列指標資料轉為 (產業列表, rule dict)。
+
+    供 CSV 與 Excel 兩條轉換路徑共用。
+
+    Args:
+        row: 來自 CSV 或 Excel 的單列 dict。
+
+    Returns:
+        (industries, rule)：產業列表與單條規則 dict。
+    """
+    industries = [
+        ind.strip()
+        for ind in row["產業別"].split("\n")
+        if ind.strip()
+    ]
+    threshold_info = parse_threshold(
+        row["指標判斷門檻值"]
+    )
+
+    rule: dict[str, Any] = {
+        "section": row["財務分析指標"],
+        "indicator_name": row["指標名稱"],
+        "indicator_code": row["指標對應財報欄位"],
+        "tag_id": row["指標編號"],
+        "value_formula": row["指標對應財報欄位"],
+        **threshold_info,
+        "risk_description": row["風險情境"],
+        "result_unit": row.get(
+            "結果單位", ""
+        ).strip(),
+    }
+
+    raw_narrative = row.get("敘事代碼", "").strip()
+    if raw_narrative:
+        rule["narrative_codes"] = [
+            c.strip()
+            for c in raw_narrative.split(",")
+            if c.strip()
+        ]
+
+    return industries, rule
+
+
 def convert(csv_path: str) -> dict[str, list[dict]]:
     """將指標 CSV 轉換為以產業為 key 的結構化設定。
 
@@ -243,39 +289,7 @@ def convert(csv_path: str) -> dict[str, list[dict]]:
     config: dict[str, list[dict]] = {}
 
     for row in rows:
-        industries = [
-            ind.strip()
-            for ind in row["產業別"].split("\n")
-            if ind.strip()
-        ]
-        threshold_info = parse_threshold(
-            row["指標判斷門檻值"]
-        )
-
-        rule: dict[str, Any] = {
-            "section": row["財務分析指標"],
-            "indicator_name": row["指標名稱"],
-            "indicator_code": row["指標對應財報欄位"],
-            "tag_id": row["指標編號"],
-            "value_formula": row["指標對應財報欄位"],
-            **threshold_info,
-            "risk_description": row["風險情境"],
-            "result_unit": row.get(
-                "結果單位", ""
-            ).strip(),
-        }
-
-        # 敘事代碼（選用欄位，逗號分隔）
-        raw_narrative = row.get(
-            "敘事代碼", ""
-        ).strip()
-        if raw_narrative:
-            rule["narrative_codes"] = [
-                c.strip()
-                for c in raw_narrative.split(",")
-                if c.strip()
-            ]
-
+        industries, rule = row_to_rule(row)
         for ind in industries:
             config.setdefault(ind, []).append(
                 rule.copy()

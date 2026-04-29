@@ -3,6 +3,10 @@
 讀取財報 CSV/JSON + 指標設定檔 JSON →
 輸出風險判斷結果 JSON。
 
+Risk 與 Narrative 是兩條獨立 pipeline：
+  - Risk：indicator.json (rules) → 計算 → sections
+  - Narrative：narrative_filter.json → 撈報表 → grouped
+
 Usage:
     python risk_checker.py \\
         --report 財報.csv \\
@@ -12,7 +16,7 @@ Usage:
         --date 20241231 \\
         [-o output.json] \\
         [--compact] [--narrative] \\
-        [--tag-table tag_table.csv] \\
+        [--narrative-filter narrative_filter.json] \\
         [--log risk_checker.log] \\
         [--debug]
 """
@@ -53,7 +57,7 @@ def parse_args(
         "output": "result.json",
         "compact": False,
         "narrative": False,
-        "tag_table": None,
+        "narrative_filter": None,
         "log": None,
         "debug": False,
     }
@@ -64,7 +68,7 @@ def parse_args(
         "--industry": "industry",
         "--customer": "customer",
         "--date": "date",
-        "--tag-table": "tag_table",
+        "--narrative-filter": "narrative_filter",
         "--log": "log",
         "-o": "output",
     }
@@ -98,7 +102,7 @@ def _usage() -> None:
     print("  --industry <str> --customer <str>")
     print("  --date <str> [-o output.json]")
     print("  [--compact] [--narrative]")
-    print("  [--tag-table tag_table.csv]")
+    print("  [--narrative-filter narrative_filter.json]")
     print("  [--log risk_checker.log]")
     print("  [--debug]")
 
@@ -197,7 +201,7 @@ def _run(args: dict[str, Any]) -> None:
         args["config"], args["industry"],
     )
 
-    # 產生報告
+    # Risk 分支：完全不依賴 narrative_filter
     result = report_mod.generate_report(
         report, rules,
         args["customer"], args["date"],
@@ -205,11 +209,35 @@ def _run(args: dict[str, Any]) -> None:
     )
     result = post_rules.apply_post_rules(result)
 
-    # 產生財報敘事
+    # Narrative 分支：純 filter-driven
     if args["narrative"]:
+        if not args["narrative_filter"]:
+            logger.error(
+                "--narrative 開啟時必須提供"
+                " --narrative-filter <json>",
+            )
+            sys.exit(1)
+        narrative_filter = (
+            narrative.load_narrative_filter(
+                args["narrative_filter"],
+                args["industry"],
+            )
+        )
+        if narrative_filter is None:
+            logger.error(
+                "無法載入產業 '%s' 的"
+                " narrative_filter",
+                args["industry"],
+            )
+            sys.exit(1)
         result["narratives"] = (
             narrative.build_narrative(
-                report, rules, args["tag_table"],
+                report, narrative_filter,
+            )
+        )
+        result["narratives_grouped"] = (
+            narrative.build_grouped_narrative(
+                report, narrative_filter,
             )
         )
 
