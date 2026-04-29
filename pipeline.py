@@ -1,28 +1,30 @@
-"""報表處理 Pipeline。
+"""報表處理 Pipeline（risk / narrative 雙獨立分支）。
 
-將報表處理流程拆為明確步驟：
-  1. 過濾 & 分群：根據指標過濾報表科目，按章節分群
-  2a. 敘事 Prompt 合併：分群報表 JSON → 敘事 Prompt
-  2b. 風險判定 + Prompt 合併：完整報表 → 風險判定 → 風險 Prompt
+從財報出發，分兩條互不依賴的管線：
+  - Risk 分支：indicator.json (rules) → 計算指標 → 分組 sections
+  - Narrative 分支：narrative_filter.json → 撈報表 → 分組 codes
+
+最後在 prompt renderer 各自填入對應 placeholder。
 
 用法:
     from risk_engine import loader
     from risk_engine.pipeline import ReportPipeline
+    from utils.narrative import load_narrative_filter
 
-    report = loader.load_report("report.csv")
-    rules  = loader.load_config("config.json", "批發業")
+    report = loader.load_report("report.json")
+    rules  = loader.load_config("indicator.json", "批發業")
+    narrative_filter = load_narrative_filter(
+        "narrative_filter.json", "批發業",
+    )
 
     pipe = ReportPipeline(
         report=report,
         rules=rules,
+        narrative_filter=narrative_filter,
         narrative_prompt_template=narr_text,
         risk_prompt_template=risk_text,
     )
     result = pipe.run()
-    # result["narrative_prompt"]  → 合併後敘事 Prompt
-    # result["risk_prompt"]       → 合併後風險 Prompt
-    # result["grouped_report"]    → 過濾分群後報表
-    # result["risk_report"]       → 風險判定結果
 """
 import logging
 from collections import OrderedDict
@@ -31,7 +33,7 @@ from typing import Any
 from risk_engine import types
 from risk_engine import report as report_mod
 from risk_engine import post_rules
-from utils.narrative import extract_section_codes
+from utils.narrative import build_grouped_narrative
 from utils.combine_prompt import (
     render_narrative_prompt,
     render_risk_prompt,
@@ -48,6 +50,9 @@ class ReportPipeline:
         rules: 該產業的指標規則列表。
         narrative_prompt_template: 敘事 Prompt 模板文字。
         risk_prompt_template: 風險 Prompt 模板文字。
+        narrative_filter: 該產業的敘事過濾
+            ({section: [{code, name}, ...]})。未提供則
+            不產出 narrative 內容。
         customer_id: 客戶代碼（風險報告用）。
         report_date: 報表日期（風險報告用）。
         industry: 產業別（風險報告用）。
@@ -59,6 +64,9 @@ class ReportPipeline:
         rules: list[dict[str, Any]],
         narrative_prompt_template: str,
         risk_prompt_template: str,
+        narrative_filter: dict[
+            str, list[dict[str, str]]
+        ] | None = None,
         customer_id: str = "",
         report_date: str = "",
         industry: str = "",
@@ -67,55 +75,35 @@ class ReportPipeline:
         self._rules = rules
         self._narrative_template = narrative_prompt_template
         self._risk_template = risk_prompt_template
+        self._narrative_filter = narrative_filter
         self._customer_id = customer_id
         self._report_date = report_date
         self._industry = industry
 
-    # ── Step 1: 過濾 & 分群 ─────────────────────────
+    # ── Step 1: 過濾 & 分群（filter-driven） ────────
 
     def filter_and_group(
         self,
     ) -> types.GroupedReport:
-        """根據指標規則過濾報表科目並按章節分群。
+        """根據 narrative_filter 撈報表並依段落分群。
 
-        從指標規則中提取所有用到的財報代碼，
-        從完整報表中過濾出這些代碼，
-        再按章節 (section) 分群。
+        純 filter-driven，不從指標公式抽 codes。
+        若未提供 narrative_filter，回空 dict。
 
         Returns:
             {章節名: {代碼: ReportRow}} 結構。
         """
-        logger.info("開始過濾與分群")
-
-        section_codes = extract_section_codes(
-            self._rules,
-        )
-
-        grouped: types.GroupedReport = OrderedDict()
-
-        for sec, codes in section_codes.items():
-            sec_data: dict[str, types.ReportRow] = (
-                OrderedDict()
+        if not self._narrative_filter:
+            logger.info(
+                "未提供 narrative_filter，"
+                "filter_and_group 回空 dict",
             )
-            for code in codes:
-                if code in self._report:
-                    sec_data[code] = self._report[code]
-                else:
-                    logger.debug(
-                        "代碼 '%s' 不存在於報表中"
-                        "（章節: %s）",
-                        code, sec,
-                    )
-            grouped[sec] = sec_data
+            return OrderedDict()
 
-        total_codes = sum(
-            len(v) for v in grouped.values()
+        logger.info("開始 filter-driven 分群")
+        return build_grouped_narrative(
+            self._report, self._narrative_filter,
         )
-        logger.info(
-            "過濾分群完成: 章節=%d, 科目=%d",
-            len(grouped), total_codes,
-        )
-        return grouped
 
     # ── Step 2a: 敘事 Prompt 合併（部分一）──────────
 
