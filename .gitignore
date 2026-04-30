@@ -4,4 +4,6 @@ __pycache__/
 log/
 *.egg-info/
 .pytest_cache/
+.venv/
+uv.lock
 
