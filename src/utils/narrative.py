@@ -150,18 +150,30 @@ def extract_section_codes(
 
 # ── narrative_filter 載入 ────────────────────────────
 
+_REQUIRED_FILTER_KEYS = (
+    "key", "display_name", "expression", "unit",
+)
+
+
 def load_narrative_filter(
     path: str,
     industry: str,
 ) -> dict[str, list[dict[str, str]]] | None:
     """載入 narrative_filter.json 並取出單一產業。
 
+    新 schema：每個 item 必含
+    {key, display_name, expression, unit}（unit 可為 ""）。
+
     Args:
         path: filter JSON 檔案路徑。
         industry: 產業名稱。
 
     Returns:
-        {段落: [{code, name}, ...]}；產業找不到回 None。
+        {段落: [{key, display_name, expression, unit},
+        ...]}；產業找不到回 None。
+
+    Raises:
+        types.ConfigError: item 缺少必要欄位。
     """
     logger.info(
         "載入 narrative_filter: %s (產業: %s)",
@@ -191,7 +203,7 @@ def load_narrative_filter(
         return None
 
     sections = data[industry]
-    for sec in sections.keys():
+    for sec, items in sections.items():
         if sec not in _KNOWN_SECTIONS:
             logger.warning(
                 "段落 '%s' 不在已知段落 (財務結構 / "
@@ -199,27 +211,50 @@ def load_narrative_filter(
                 "現金流量) 中，prompt 替換可能無對應"
                 " placeholder", sec,
             )
+        for item in items:
+            missing = [
+                k for k in _REQUIRED_FILTER_KEYS
+                if k not in item
+            ]
+            if missing:
+                msg = (
+                    f"narrative_filter item 缺少欄位 "
+                    f"{missing}（產業: {industry}, "
+                    f"段落: {sec}, item: {item}）"
+                )
+                logger.error(msg)
+                raise types.ConfigError(msg)
 
     return sections
 
 
 # ── grouped narrative 建構（filter-driven） ─────────
 
+_PERIODS = ("Current", "Period_2", "Period_3")
+
+
 def build_grouped_narrative(
     report: types.Report,
     narrative_filter: dict[str, list[dict[str, str]]],
 ) -> types.GroupedReport:
-    """依 filter 撈 report，輸出 {section: {code: ReportRow}}。
+    """依 filter 評估 expression，輸出 {section: {key: row}}。
 
-    輸出格式同 group_sample.json。
+    每個 item 走 formula.evaluate_formula 對 Current /
+    Period_2 / Period_3 三期分別取值。產出的 row 仍以
+    `FA_CANME` / `單位` / `Current` / `Period_2` /
+    `Period_3` 五鍵為形狀，與 simple_convert 相容。
+
+    display_name / unit 兩者皆「Excel 設定 → fallback
+    至 expression 首個 code 的 FA_CANME / 單位」。
 
     Args:
         report: 財報資料。
         narrative_filter: 單一產業的 filter
-            ({section: [{code, name}, ...]})。
+            ({section: [{key, display_name, expression,
+            unit}, ...]})。
 
     Returns:
-        {段落: {代碼: ReportRow}} 結構。
+        {段落: {key: ReportRow}} 結構（key 為段落內唯一）。
     """
     logger.info("開始建構 grouped narrative")
 
@@ -230,27 +265,49 @@ def build_grouped_narrative(
             OrderedDict()
         )
         for item in items:
-            code = item.get("code", "").strip()
-            fallback_name = item.get("name", "").strip()
-            if not code:
-                continue
-            if code not in report:
-                logger.warning(
-                    "代碼 '%s' 不存在於財報中"
-                    "（段落: %s）",
-                    code, section,
+            key = item["key"]
+            expression = item["expression"]
+            display_name = item.get("display_name", "")
+            unit = item.get("unit", "")
+
+            # 表達式三期分別計算
+            values: dict[str, float | None] = {}
+            for period in _PERIODS:
+                values[period] = formula_mod.evaluate_formula(
+                    expression, report, period,
                 )
-                continue
-            row = report[code]
-            if not row.get("FA_CANME") and fallback_name:
-                row = dict(row)
-                row["FA_CANME"] = fallback_name
-            sec_data[code] = row
+
+            # display_name / unit fallback 至首個 code
+            if not display_name or not unit:
+                codes = formula_mod.extract_codes(expression)
+                first_code = codes[0] if codes else ""
+                first_row = report.get(first_code, {})
+                if not display_name:
+                    display_name = first_row.get(
+                        "FA_CANME", "",
+                    )
+                if not unit:
+                    unit = first_row.get("單位", "")
+                if not first_code or first_code not in report:
+                    logger.warning(
+                        "expression '%s' 首個代碼不存在於"
+                        " 財報，display_name/unit 維持空"
+                        "（段落: %s, key: %s）",
+                        expression, section, key,
+                    )
+
+            sec_data[key] = {
+                "FA_CANME": display_name,
+                "單位": unit,
+                "Current": values["Current"],
+                "Period_2": values["Period_2"],
+                "Period_3": values["Period_3"],
+            }
         grouped[section] = sec_data
 
     total = sum(len(v) for v in grouped.values())
     logger.info(
-        "grouped narrative 建構完成: 段落=%d, 科目=%d",
+        "grouped narrative 建構完成: 段落=%d, 項目=%d",
         len(grouped), total,
     )
     return grouped

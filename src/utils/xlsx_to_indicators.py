@@ -4,11 +4,16 @@ Excel 須包含兩個工作表：
   - 指標 (Sheet1)：與既有 CSV 相同欄位 — 產業別、財務分析指標、
                    指標名稱、指標對應財報欄位、指標編號、
                    指標判斷門檻值、風險情境、結果單位、敘事代碼（選用）
-  - 敘事指標 (Sheet2)：產業別、段落、會計科目、會計科目代碼
+  - 敘事指標 (Sheet2)：
+      必填欄位：產業別、段落、會計科目、會計科目代碼
+      選填欄位：公式、顯示名稱、單位
+        (留白時 expression=會計科目代碼、display_name=會計科目、unit="")
 
 輸出：
   - indicator.json：{產業: [rule, ...]}（與 convert_indicators.py 相容）
-  - narrative_filter.json：{產業: {段落: [{code, name}, ...]}}
+  - narrative_filter.json：{產業: {段落: [
+      {key, display_name, expression, unit}, ...]}}
+    其中 key 在同段落內保證唯一（衝突時 append _2、_3…）。
 
 用法:
     python -m utils.xlsx_to_indicators 指標.xlsx \\
@@ -42,9 +47,14 @@ _INDICATOR_COLUMNS = [
     "指標判斷門檻值", "風險情境",
 ]
 
-# Sheet 2 欄位
+# Sheet 2 必填欄位
 _FILTER_COLUMNS = [
     "產業別", "段落", "會計科目", "會計科目代碼",
+]
+
+# Sheet 2 選填欄位（缺欄時退化為 fallback 行為）
+_FILTER_OPTIONAL_COLUMNS = [
+    "公式", "顯示名稱", "單位",
 ]
 
 
@@ -112,12 +122,36 @@ def parse_indicator_sheet(
     return config
 
 
+def _make_unique_key(
+    base: str,
+    existing_keys: set[str],
+) -> str:
+    """段落內 key 衝突時 append _2、_3…，回傳唯一 key。"""
+    if base not in existing_keys:
+        return base
+    i = 2
+    while f"{base}_{i}" in existing_keys:
+        i += 1
+    return f"{base}_{i}"
+
+
 def parse_filter_sheet(
     df: pd.DataFrame,
 ) -> dict[str, dict[str, list[dict[str, str]]]]:
-    """Sheet 2 → {產業: {段落: [{code, name}, ...]}}。
+    """Sheet 2 → {產業: {段落: [{key, display_name,
+        expression, unit}, ...]}}。
 
-    保留出現順序、去重（同段落內同 code 只保留首次）。
+    必填欄位：產業別、段落、會計科目、會計科目代碼。
+    選填欄位：公式、顯示名稱、單位（留白時套 fallback）。
+
+    Fallback 規則（S1.3）：
+      - expression 留白 → 會計科目代碼
+      - display_name 留白 → 會計科目
+      - unit 留白 → "" （narrative 模組階段再 fallback 至首 code 的單位）
+      - key 預設 = 會計科目代碼；同段落內衝突時 append _2、_3…
+
+    去重（S1.4）：同 (產業, 段落) 內，
+        若 (會計科目代碼, expression) 完全相同則略過。
 
     Args:
         df: 敘事指標工作表的 DataFrame。
@@ -137,6 +171,12 @@ def parse_filter_sheet(
     result: dict[
         str, dict[str, list[dict[str, str]]]
     ] = {}
+    # (industry, section) -> set of (code, expression) 用於去重
+    seen: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    # (industry, section) -> set of keys 用於 key 衝突檢查
+    keys_per_section: dict[
+        tuple[str, str], set[str]
+    ] = {}
 
     for _, row in df.iterrows():
         row_dict = _row_to_dict(row)
@@ -144,9 +184,16 @@ def parse_filter_sheet(
         section = row_dict.get("段落", "")
         name = row_dict.get("會計科目", "")
         code = row_dict.get("會計科目代碼", "")
+        formula_raw = row_dict.get("公式", "")
+        display_name_raw = row_dict.get("顯示名稱", "")
+        unit_raw = row_dict.get("單位", "")
 
         if not (industries_raw and section and code):
             continue
+
+        expression = formula_raw or code
+        display_name = display_name_raw or name
+        unit = unit_raw
 
         industries = [
             ind.strip()
@@ -159,14 +206,25 @@ def parse_filter_sheet(
             sec_bucket = ind_bucket.setdefault(
                 section, [],
             )
-            if any(
-                item["code"] == code
-                for item in sec_bucket
-            ):
-                continue
-            sec_bucket.append(
-                {"code": code, "name": name},
+            sec_seen = seen.setdefault((ind, section), set())
+            sec_keys = keys_per_section.setdefault(
+                (ind, section), set(),
             )
+
+            dedup_key = (code, expression)
+            if dedup_key in sec_seen:
+                continue
+            sec_seen.add(dedup_key)
+
+            unique_key = _make_unique_key(code, sec_keys)
+            sec_keys.add(unique_key)
+
+            sec_bucket.append({
+                "key": unique_key,
+                "display_name": display_name,
+                "expression": expression,
+                "unit": unit,
+            })
 
     return result
 

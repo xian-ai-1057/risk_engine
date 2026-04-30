@@ -38,12 +38,25 @@ def rules():
     ]
 
 
+def _nf_item(key, expression, display_name="", unit=""):
+    return {
+        "key": key, "expression": expression,
+        "display_name": display_name, "unit": unit,
+    }
+
+
 class TestFilterAndGroup:
     def test_with_filter(self, report, rules):
         nf = {
             "財務結構": [
-                {"code": "TIBA009", "name": "非流動資產"},
-                {"code": "TIBA040", "name": "權益總額"},
+                _nf_item(
+                    "TIBA009", "TIBA009",
+                    display_name="非流動資產", unit="仟元",
+                ),
+                _nf_item(
+                    "TIBA040", "TIBA040",
+                    display_name="權益總額", unit="仟元",
+                ),
             ],
         }
         pipe = ReportPipeline(
@@ -58,6 +71,12 @@ class TestFilterAndGroup:
         assert list(grouped["財務結構"].keys()) == [
             "TIBA009", "TIBA040",
         ]
+        # ReportRow 形狀仍維持 simple_convert 相容
+        row = grouped["財務結構"]["TIBA040"]
+        assert set(row.keys()) >= {
+            "FA_CANME", "單位",
+            "Current", "Period_2", "Period_3",
+        }
 
     def test_without_filter_returns_empty(
         self, report, rules,
@@ -71,13 +90,20 @@ class TestFilterAndGroup:
         grouped = pipe.filter_and_group()
         assert grouped == {}
 
-    def test_filter_skips_missing_codes(
+    def test_missing_code_kept_with_none(
         self, report, rules,
     ):
+        """S-G4：缺值靜默 — 缺漏代碼仍保留 row，三期皆 None。"""
         nf = {
             "財務結構": [
-                {"code": "TIBA009", "name": "非流動資產"},
-                {"code": "MISSING", "name": "缺失"},
+                _nf_item(
+                    "TIBA009", "TIBA009",
+                    display_name="非流動資產", unit="仟元",
+                ),
+                _nf_item(
+                    "MISSING", "MISSING",
+                    display_name="缺失", unit="仟元",
+                ),
             ],
         }
         pipe = ReportPipeline(
@@ -89,8 +115,12 @@ class TestFilterAndGroup:
         )
         grouped = pipe.filter_and_group()
         assert list(grouped["財務結構"].keys()) == [
-            "TIBA009",
+            "TIBA009", "MISSING",
         ]
+        row = grouped["財務結構"]["MISSING"]
+        assert row["Current"] is None
+        assert row["Period_2"] is None
+        assert row["Period_3"] is None
 
 
 class TestRiskPathIndependence:
@@ -114,7 +144,10 @@ class TestRiskPathIndependence:
     ):
         nf = {
             "財務結構": [
-                {"code": "TIBA040", "name": "權益總額"},
+                _nf_item(
+                    "TIBA040", "TIBA040",
+                    display_name="權益總額", unit="仟元",
+                ),
             ],
         }
         pipe_no_filter = ReportPipeline(
