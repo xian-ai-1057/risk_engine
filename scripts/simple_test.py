@@ -12,11 +12,13 @@ from risk_engine import ReportPipeline, loader
 from risk_engine.loader import _build_report_row
 from risk_engine.types import ExeOutput
 from utils.combine_prompt import render_narrative_prompt
+from utils.narrative import load_narrative_filter
 
 
 # ── 測試參數（可自行修改）──────────────────────────
 REPORT_PATH = r"data\report\新測試案例_json\Samson Paper Company_單一.json"
 CONFIG_PATH = r"data\indicators_config.json"
+NARRATIVE_FILTER_PATH = r"data\narrative_filter.json"
 INDUSTRY = "7大指標"
 CUSTOMER_ID = "Samson Paper Company_單一"
 REPORT_DATE = "20260430"
@@ -41,6 +43,14 @@ def main() -> None:
         if code not in _META_KEYS
     }
     rules = loader.load_config(CONFIG_PATH, INDUSTRY)
+    narrative_filter = load_narrative_filter(
+        NARRATIVE_FILTER_PATH, INDUSTRY,
+    )
+    if narrative_filter is None:
+        raise SystemExit(
+            f"無法載入 narrative_filter: {NARRATIVE_FILTER_PATH}"
+            f" (產業: {INDUSTRY})",
+        )
 
     # 2. 讀取 Prompt 模板
     with open(NARR_PROMPT_PATH, encoding="utf-8") as f:
@@ -54,6 +64,7 @@ def main() -> None:
         rules=rules,
         narrative_prompt_template=narr_template,
         risk_prompt_template=risk_template,
+        narrative_filter=narrative_filter,
         customer_id=CUSTOMER_ID,
         report_date=REPORT_DATE,
         industry=INDUSTRY,
