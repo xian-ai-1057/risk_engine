@@ -12,7 +12,9 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+)
 COMPANY_LIST = os.path.join(BASE_DIR, "data", "report", "測試案例名單.csv")
 SOURCE_CSV = os.path.join(BASE_DIR, "data", "report", "50家測試案例.csv")
 TAG_TABLE = os.path.join(BASE_DIR, "data", "tag_table.csv")

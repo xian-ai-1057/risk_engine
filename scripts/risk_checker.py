@@ -23,7 +23,12 @@ Usage:
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any
+
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 from risk_engine import loader
 from risk_engine import log_config
