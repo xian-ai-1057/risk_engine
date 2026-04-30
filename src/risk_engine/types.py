@@ -166,9 +166,22 @@ class PipelineResult(TypedDict):
 
 # ── EXE 輸出 ─────────────────────────────────────
 
-class ExeOutput(TypedDict):
-    """EXE 最終輸出結構。"""
+EXE_SCHEMA_VERSION = "1.0"
+"""EXE 輸出 schema 版本。上游可據此做相容性檢查。"""
 
+
+class ExeOutput(TypedDict, total=False):
+    """EXE 最終輸出結構。
+
+    必填：``schema_version``、``request_id``、``industry``、
+    ``narrative_prompt``、``risk_prompt``、``grouped_report``、
+    ``risk_report``。
+
+    選填：``customer_id``、``report_date``（呼叫端未提供
+    則不寫入）。
+    """
+
+    schema_version: str
     request_id: str
     customer_id: str
     report_date: str
@@ -177,3 +190,29 @@ class ExeOutput(TypedDict):
     risk_prompt: str
     grouped_report: GroupedReport
     risk_report: FullReport
+
+
+# ── EXE 錯誤輸出 ─────────────────────────────────
+
+ERROR_CODES = (
+    "INVALID_ARGS",
+    "MISSING_FILE",
+    "CONFIG_ERROR",
+    "PROCESSING_ERROR",
+)
+"""EXE ``--stdout`` 模式錯誤 JSON 的合法 ``error_code`` 集合。
+
+對應關係：
+  - ``INVALID_ARGS``    參數驗證 / stdin 解析錯誤   (exit 1)
+  - ``MISSING_FILE``    必要檔案不存在               (exit 2)
+  - ``CONFIG_ERROR``    設定 / 報表載入錯誤          (exit 2)
+  - ``PROCESSING_ERROR`` 其他未預期錯誤              (exit 3)
+"""
+
+
+class ExeError(TypedDict):
+    """EXE ``--stdout`` 模式下的錯誤 JSON 結構。"""
+
+    error: str
+    error_code: str
+    request_id: str

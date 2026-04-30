@@ -1,0 +1,418 @@
+{
+  "7大指標": [
+    {
+      "section": "財務結構",
+      "indicator_name": "固定長期適合率",
+      "indicator_code": "(TIBA009-TIBA014)/(TIBA040+TIBA026)",
+      "tag_id": "STRUCT_TAG1",
+      "value_formula": "(TIBA009-TIBA014)/(TIBA040+TIBA026)",
+      "compare_type": "absolute",
+      "operator": ">",
+      "threshold": 1.0,
+      "risk_description": "有以短支長之虞",
+      "result_unit": "倍"
+    },
+    {
+      "section": "財務結構",
+      "indicator_name": "",
+      "indicator_code": "TIBA040",
+      "tag_id": "TIBA040_TAG1",
+      "value_formula": "TIBA040",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "淨值為負",
+      "result_unit": "仟元"
+    },
+    {
+      "section": "財務結構",
+      "indicator_name": "",
+      "indicator_code": "(TIBA040-TIBA035*0.5)",
+      "tag_id": "STRUCT_TAG2",
+      "value_formula": "(TIBA040-TIBA035*0.5)",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "累積虧損可能超過股本二分之一",
+      "result_unit": "仟元"
+    },
+    {
+      "section": "財務結構",
+      "indicator_name": "負債權益比",
+      "indicator_code": "TIBB002",
+      "tag_id": "TIBB002_TAG1",
+      "value_formula": "TIBB002",
+      "compare_type": "absolute",
+      "operator": ">",
+      "threshold": 150.0,
+      "risk_description": "負債比偏高",
+      "result_unit": "%"
+    },
+    {
+      "section": "財務結構",
+      "indicator_name": "負債權益比",
+      "indicator_code": "TIBB002-TIBB002_PRV",
+      "tag_id": "TIBB002_TAG2",
+      "value_formula": "TIBB002-TIBB002_PRV",
+      "compare_type": "absolute",
+      "operator": ">=",
+      "threshold": 30.0,
+      "risk_description": "負債比率逐年增加，財務結構弱化",
+      "result_unit": "%"
+    },
+    {
+      "section": "財務結構",
+      "indicator_name": "銀借淨值比",
+      "indicator_code": "TIBB004",
+      "tag_id": "TIBB004_TAG1",
+      "value_formula": "TIBB004",
+      "compare_type": "absolute",
+      "operator": ">",
+      "threshold": 100.0,
+      "risk_description": "銀借比高，應留意是否過度舉債",
+      "result_unit": "%"
+    },
+    {
+      "section": "財務結構",
+      "indicator_name": "銀借淨值比",
+      "indicator_code": "TIBB004-TIBB004_PRV",
+      "tag_id": "TIBB004_TAG2",
+      "value_formula": "TIBB004-TIBB004_PRV",
+      "compare_type": "absolute",
+      "operator": ">",
+      "threshold": 30.0,
+      "risk_description": "是否過度舉債",
+      "result_unit": "%"
+    },
+    {
+      "section": "現金流量",
+      "indicator_name": "",
+      "indicator_code": "TIBC014",
+      "tag_id": "TIBC014_TAG1",
+      "value_formula": "TIBC014",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "本期營業活動呈現金流出",
+      "result_unit": "仟元"
+    },
+    {
+      "section": "現金流量",
+      "indicator_name": "自由現金流量",
+      "indicator_code": "(TIBC014+TIBC014_PRV+TIBC014_PRV2)+(TIBC022+TIBC022_PRV+TIBC022_PRV2)",
+      "tag_id": "FCF_TAG1",
+      "value_formula": "(TIBC014+TIBC014_PRV+TIBC014_PRV2)+(TIBC022+TIBC022_PRV+TIBC022_PRV2)",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "本業現金流不足以支應公司長期發展所需資金",
+      "result_unit": "仟元"
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "應收帳款週轉率 / 週轉天數",
+      "indicator_code": "TIBB011-TIBB011_PRV",
+      "tag_id": "TIBB011_TAG1",
+      "value_formula": "TIBB011-TIBB011_PRV",
+      "compare_type": "absolute",
+      "operator": ">=",
+      "threshold": 45.0,
+      "risk_description": "應收帳款天期較前期增加N天",
+      "result_unit": "天"
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "應收帳款週轉率 / 週轉天數",
+      "indicator_code": "TIBB011",
+      "tag_id": "TIBB011_TAG3",
+      "value_formula": "TIBB011",
+      "compare_type": "absolute",
+      "operator": ">=",
+      "threshold": 150.0,
+      "risk_description": "應收天期達 150 天以上（絕對高風險門檻）",
+      "result_unit": "天"
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "應收帳款週轉率 / 週轉天數",
+      "indicator_code": "TIBB011,TIBA041",
+      "tag_id": "MIX_TAG_G7_02",
+      "value_formula": "TIBB011,TIBA041",
+      "compare_type": "compound",
+      "condition_tree": {
+        "node_type": "and",
+        "children": [
+          {
+            "node_type": "condition",
+            "value_formula": "(TIBB011-TIBB011_PRV)",
+            "operator": ">=",
+            "threshold": 45.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "(TIBA041-TIBA041_PRV)/TIBA041_PRV*100",
+            "operator": "<=",
+            "threshold": 0.0
+          }
+        ]
+      },
+      "risk_description": "應收帳款天期拉長，且營收衰退，經營績效弱化",
+      "result_unit": ""
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "存貨週轉率 / 存貨週轉天數",
+      "indicator_code": "TIBB013-TIBB013_PRV",
+      "tag_id": "TIBB013_TAG1",
+      "value_formula": "TIBB013-TIBB013_PRV",
+      "compare_type": "absolute",
+      "operator": ">=",
+      "threshold": 45.0,
+      "risk_description": "存貨天期較前期增加N天",
+      "result_unit": "天"
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "存貨週轉率 / 存貨週轉天數",
+      "indicator_code": "TIBA006,TIBA041",
+      "tag_id": "MIX_TAG_G7_04",
+      "value_formula": "TIBA006,TIBA041",
+      "compare_type": "compound",
+      "condition_tree": {
+        "node_type": "and",
+        "children": [
+          {
+            "node_type": "condition",
+            "value_formula": "(TIBA006-TIBA006_PRV)/TIBA006_PRV*100",
+            "operator": ">",
+            "threshold": 10.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "(TIBA041-TIBA041_PRV)/TIBA041_PRV*100",
+            "operator": "<",
+            "threshold": 0.0
+          }
+        ]
+      },
+      "risk_description": "存貨天期增加且營收衰退，經營效能弱化",
+      "result_unit": ""
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "存貨週轉率 / 存貨週轉天數",
+      "indicator_code": "TIBB013",
+      "tag_id": "TIBB013_TAG2",
+      "value_formula": "TIBB013",
+      "compare_type": "absolute",
+      "operator": ">=",
+      "threshold": 180.0,
+      "risk_description": "存貨天期達 180 天（絕對高風險門檻）",
+      "result_unit": "天"
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "",
+      "indicator_code": "TIBB013+TIBB011-TIBB012",
+      "tag_id": "CCC_TAG1",
+      "value_formula": "TIBB013+TIBB011-TIBB012",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "本期營運周轉天期<=0，應無資金缺口",
+      "result_unit": "天"
+    },
+    {
+      "section": "經營效能",
+      "indicator_name": "營運周轉天期",
+      "indicator_code": "(TIBB013+TIBB011-TIBB012)-(TIBB013_PRV+TIBB011_PRV-TIBB012_PRV)",
+      "tag_id": "CCC_TAG2",
+      "value_formula": "(TIBB013+TIBB011-TIBB012)-(TIBB013_PRV+TIBB011_PRV-TIBB012_PRV)",
+      "compare_type": "absolute",
+      "operator": ">=",
+      "threshold": 45.0,
+      "risk_description": "營運周轉天期拉長N天，顯示營運資金缺口增加",
+      "result_unit": "天"
+    },
+    {
+      "section": "償債能力",
+      "indicator_name": "利息保障倍數",
+      "indicator_code": "(TIBA049+TIBA047+TIBC003)/TIBA047",
+      "tag_id": "ICR_TAG1",
+      "value_formula": "(TIBA049+TIBA047+TIBC003)/TIBA047",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 1.0,
+      "risk_description": "恐獲利無法支應利息",
+      "result_unit": "倍"
+    },
+    {
+      "section": "償債能力",
+      "indicator_name": "流動比率",
+      "indicator_code": "TIBB007",
+      "tag_id": "TIBB007_TAG1",
+      "value_formula": "TIBB007",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 100.0,
+      "risk_description": "短期償債能力不足",
+      "result_unit": "%"
+    },
+    {
+      "section": "償債能力",
+      "indicator_name": "短期借款比率",
+      "indicator_code": "TIBB010",
+      "tag_id": "TIBB010_TAG1",
+      "value_formula": "TIBB010",
+      "compare_type": "absolute",
+      "operator": ">",
+      "threshold": 50.0,
+      "risk_description": "短期償債能力偏弱",
+      "result_unit": "%"
+    },
+    {
+      "section": "償債能力",
+      "indicator_name": "營運資金缺口倍數",
+      "indicator_code": "TIBA041,TIBA033",
+      "tag_id": "MIX_TAG_G7_12",
+      "value_formula": "TIBA041,TIBA033",
+      "compare_type": "compound",
+      "condition_tree": {
+        "node_type": "and",
+        "children": [
+          {
+            "node_type": "condition",
+            "value_formula": "(TIBA041-TIBA041_PRV)/TIBA041_PRV*100",
+            "operator": "<",
+            "threshold": 2.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "(TIBA033-TIBA033_PRV)/TIBA033_PRV*100",
+            "operator": ">",
+            "threshold": 5.0
+          }
+        ]
+      },
+      "risk_description": "營收停滯但債務攀升",
+      "result_unit": ""
+    },
+    {
+      "section": "獲利能力",
+      "indicator_name": "毛利率較前期變動",
+      "indicator_code": "(TIBB018-TIBB018_PRV)/TIBB018_PRV",
+      "tag_id": "TIBB018_TAG1",
+      "value_formula": "(TIBB018-TIBB018_PRV)/TIBB018_PRV",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "毛利率衰退",
+      "result_unit": ""
+    },
+    {
+      "section": "獲利能力",
+      "indicator_name": "營業利益率",
+      "indicator_code": "TIBB019-TIBB019_PRV",
+      "tag_id": "TIBB019_TAG1",
+      "value_formula": "TIBB019-TIBB019_PRV",
+      "compare_type": "absolute",
+      "operator": "<",
+      "threshold": 0.0,
+      "risk_description": "營業利益率衰退",
+      "result_unit": "%"
+    },
+    {
+      "section": "獲利能力",
+      "indicator_name": "營業利益率",
+      "indicator_code": "TIBB019,TIBB019_PRV,TIBB019_PRV2",
+      "tag_id": "MIX_TAG_G7_23",
+      "value_formula": "TIBB019,TIBB019_PRV,TIBB019_PRV2",
+      "compare_type": "compound",
+      "condition_tree": {
+        "node_type": "or",
+        "children": [
+          {
+            "node_type": "condition",
+            "value_formula": "TIBB019",
+            "operator": "<",
+            "threshold": 0.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "TIBB019_PRV",
+            "operator": "<",
+            "threshold": 0.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "TIBB019_PRV2",
+            "operator": "<",
+            "threshold": 0.0
+          }
+        ]
+      },
+      "risk_description": "近3年營業利益率有負值發生",
+      "result_unit": ""
+    },
+    {
+      "section": "獲利能力",
+      "indicator_name": "毛利率",
+      "indicator_code": "TIBB018,TIBB018_PRV,TIBB018_PRV2",
+      "tag_id": "MIX_TAG_G7_24",
+      "value_formula": "TIBB018,TIBB018_PRV,TIBB018_PRV2",
+      "compare_type": "compound",
+      "condition_tree": {
+        "node_type": "or",
+        "children": [
+          {
+            "node_type": "condition",
+            "value_formula": "TIBB018",
+            "operator": "<",
+            "threshold": 0.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "TIBB018_PRV",
+            "operator": "<",
+            "threshold": 0.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "TIBB018_PRV2",
+            "operator": "<",
+            "threshold": 0.0
+          }
+        ]
+      },
+      "risk_description": "近3年毛利率有負值發生",
+      "result_unit": ""
+    },
+    {
+      "section": "獲利能力",
+      "indicator_name": "EBITDA 利潤率",
+      "indicator_code": "TIBA063,TIBA041,TIBC014",
+      "tag_id": "MIX_TAG_G7_20",
+      "value_formula": "TIBA063,TIBA041,TIBC014",
+      "compare_type": "compound",
+      "condition_tree": {
+        "node_type": "and",
+        "children": [
+          {
+            "node_type": "condition",
+            "value_formula": "TIBA063/TIBA041",
+            "operator": ">",
+            "threshold": 10.0
+          },
+          {
+            "node_type": "condition",
+            "value_formula": "TIBC014",
+            "operator": "<",
+            "threshold": 0.0
+          }
+        ]
+      },
+      "risk_description": "EBITDA 高但 營業活動淨現金流為負；資金積壓於應收帳款或存貨",
+      "result_unit": ""
+    }
+  ]
+}

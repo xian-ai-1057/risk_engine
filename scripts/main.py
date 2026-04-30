@@ -34,22 +34,15 @@ from typing import Any
 from datetime import datetime
 
 from risk_engine import loader, log_config, types
-from risk_engine.loader import _build_report_row
+from risk_engine.loader import build_report_row
+from risk_engine.paths import get_base_dir
 from risk_engine.pipeline import ReportPipeline
-from utils.combine_prompt import render_narrative_prompt
+from risk_engine.types import EXE_SCHEMA_VERSION
 from utils.html_to_json import convert_html_files_to_dict
 
 logger = logging.getLogger(__name__)
-TIME_STAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # ── 路徑解析 ──────────────────────────────────────
-
-def _get_base_dir() -> str:
-    """取得 EXE 或腳本所在目錄。"""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
-
 
 def _resolve_paths(base_dir: str) -> dict[str, str]:
     """自動發現 EXE 同目錄下的設定檔與 prompt 檔。
@@ -212,12 +205,37 @@ def _validate_args(args: dict[str, Any]) -> None:
 
 # ── 主流程 ────────────────────────────────────────
 
+# html_to_json 在 raw dict 中夾帶的 metadata key。
+# `_period_dates` 在下方會明確 pop 出來；`skipped` 用於
+# 過濾被忽略的代碼資訊。
+_META_KEYS = {"skipped"}
+
+
+def _read_prompt_template(path: str, label: str) -> str:
+    """讀取 prompt 模板檔。
+
+    Args:
+        path: 模板檔路徑。
+        label: 用於錯誤訊息的友善名稱（例如 "敘事"）。
+
+    Raises:
+        FileNotFoundError: 檔案不存在或無法讀取。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError as e:
+        raise FileNotFoundError(
+            f"無法讀取{label} prompt 模板: {path} — {e}"
+        ) from e
+
+
 def _run(
     args: dict[str, Any],
     request_id: str,
 ) -> types.ExeOutput:
     """執行主要處理流程。"""
-    base_dir = _get_base_dir()
+    base_dir = get_base_dir()
     paths = _resolve_paths(base_dir)
 
     # 1. HTML → dict（純記憶體）
@@ -234,9 +252,8 @@ def _run(
     logger.info("期間日期: %s", period_dates)
 
     # 2. 正規化為 Report
-    _META_KEYS = {"skipped", "_period_dates"}
     report: types.Report = {
-        code: _build_report_row(data)
+        code: build_report_row(data)
         for code, data in raw_report.items()
         if code not in _META_KEYS
     }
@@ -248,31 +265,14 @@ def _run(
     )
 
     # 4. 讀取 user prompt 模板
-    try:
-        with open(
-            paths["narrative_user_prompt"],
-            encoding="utf-8",
-        ) as f:
-            narrative_tmpl = f.read()
-    except OSError as e:
-        raise FileNotFoundError(
-            f"無法讀取敘事 prompt 模板: "
-            f"{paths['narrative_user_prompt']} — {e}"
-        ) from e
+    narrative_tmpl = _read_prompt_template(
+        paths["narrative_user_prompt"], "敘事",
+    )
+    risk_tmpl = _read_prompt_template(
+        paths["risk_user_prompt"], "風險",
+    )
 
-    try:
-        with open(
-            paths["risk_user_prompt"],
-            encoding="utf-8",
-        ) as f:
-            risk_tmpl = f.read()
-    except OSError as e:
-        raise FileNotFoundError(
-            f"無法讀取風險 prompt 模板: "
-            f"{paths['risk_user_prompt']} — {e}"
-        ) from e
-
-    # 5. 執行 Pipeline
+    # 5. 執行 Pipeline（period_dates 由 pipeline 統一處理）
     pipe = ReportPipeline(
         report=report,
         rules=rules,
@@ -281,24 +281,16 @@ def _run(
         customer_id=args.get("customer", ""),
         report_date=args.get("date", ""),
         industry=args["industry"],
+        period_dates=period_dates or None,
     )
     result = pipe.run()
 
-    # 5b. 若有期間日期，重新渲染敘事 prompt（格式化版）
-    narrative_prompt = result["narrative_prompt"]
-    if period_dates:
-        narrative_prompt = render_narrative_prompt(
-            narrative_tmpl,
-            result["grouped_report"],
-            period_dates=period_dates,
-        )
-        logger.info("已重新渲染敘事 prompt（格式化版）")
-
     # 6. 組裝最終輸出
     output: types.ExeOutput = {
+        "schema_version": EXE_SCHEMA_VERSION,
         "request_id": request_id,
         "industry": args["industry"],
-        "narrative_prompt": narrative_prompt,
+        "narrative_prompt": result["narrative_prompt"],
         "risk_prompt": result["risk_prompt"],
         "grouped_report": result["grouped_report"],
         "risk_report": result["risk_report"],
@@ -315,6 +307,21 @@ def _run(
     return output
 
 
+def _default_output_path(request_id: str) -> str:
+    """產生預設 output 路徑。
+
+    位於 ``get_base_dir()/output/`` 下，與 cwd 無關，避免
+    上游併發呼叫時把產出檔寫到呼叫方的 cwd。檔名帶
+    ``request_id`` + per-request timestamp，併發不互相覆蓋。
+    """
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(
+        get_base_dir(),
+        "output",
+        f"result_{request_id}_{ts}.json",
+    )
+
+
 def _write_output(
     output: types.ExeOutput,
     output_path: str | None,
@@ -328,7 +335,7 @@ def _write_output(
 
     # 寫入檔案
     if output_path is None:
-        output_path = f"output/result_{request_id}_{TIME_STAMP}.json"
+        output_path = _default_output_path(request_id)
 
     if output_path:
         try:
@@ -390,6 +397,7 @@ def main() -> None:
             print(
                 json.dumps(
                     {"error": str(e),
+                     "error_code": "INVALID_ARGS",
                      "request_id": fallback_id},
                     ensure_ascii=False,
                 ),
@@ -427,12 +435,9 @@ def main() -> None:
     except ValueError as e:
         logger.error("參數錯誤: %s", e)
         if args.get("stdout"):
-            print(
-                json.dumps(
-                    {"error": str(e),
-                     "request_id": request_id},
-                    ensure_ascii=False,
-                ),
+            _exit_error(
+                str(e), "INVALID_ARGS",
+                request_id, args,
             )
         else:
             _usage()
@@ -444,18 +449,24 @@ def main() -> None:
         output = _run(args, request_id)
     except FileNotFoundError as e:
         logger.error("檔案錯誤: %s", e)
-        _exit_error(str(e), request_id, args)
+        _exit_error(
+            str(e), "MISSING_FILE", request_id, args,
+        )
         sys.exit(2)
     except (
         types.ReportLoadError,
         types.ConfigError,
     ) as e:
         logger.error("設定錯誤: %s", e)
-        _exit_error(str(e), request_id, args)
+        _exit_error(
+            str(e), "CONFIG_ERROR", request_id, args,
+        )
         sys.exit(2)
     except Exception as e:
         logger.exception("處理錯誤")
-        _exit_error(str(e), request_id, args)
+        _exit_error(
+            str(e), "PROCESSING_ERROR", request_id, args,
+        )
         sys.exit(3)
 
     # 輸出
@@ -471,18 +482,26 @@ def main() -> None:
 
 def _exit_error(
     msg: str,
+    error_code: str,
     request_id: str,
     args: dict[str, Any],
 ) -> None:
-    """錯誤時的輸出處理。"""
+    """錯誤時的輸出處理。
+
+    Args:
+        msg: 錯誤訊息（人類可讀）。
+        error_code: ``types.ERROR_CODES`` 中的代碼，
+            供上游程式分流。
+        request_id: 本次請求識別碼。
+        args: 已解析的參數 dict（用來判斷是否走 ``--stdout``）。
+    """
     if args.get("stdout"):
-        print(
-            json.dumps(
-                {"error": msg,
-                 "request_id": request_id},
-                ensure_ascii=False,
-            ),
-        )
+        payload: types.ExeError = {
+            "error": msg,
+            "error_code": error_code,
+            "request_id": request_id,
+        }
+        print(json.dumps(payload, ensure_ascii=False))
     else:
         print(f"錯誤: {msg}", file=sys.stderr)
 

@@ -11,6 +11,8 @@ import os
 import sys
 from datetime import datetime
 
+from risk_engine.paths import get_base_dir
+
 
 _DEFAULT_FMT = (
     "%(asctime)s [%(levelname)s]"
@@ -18,12 +20,9 @@ _DEFAULT_FMT = (
 )
 _DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
-
-def _get_base_dir() -> str:
-    """取得程式所在目錄（相容 EXE 打包）。"""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.getcwd()
+# 標記由 setup_logging 加進 root logger 的 handlers，
+# 重複呼叫時只移除自己加過的，不動到外部 handler。
+_OWN_HANDLER_ATTR = "_risk_engine_owned"
 
 
 def setup_logging(
@@ -32,6 +31,9 @@ def setup_logging(
     request_id: str = "",
 ) -> None:
     """設定 root logger：console + 檔案。
+
+    冪等：重複呼叫時只清除前次由本函數加入的 handler，
+    不會清除外部（如 pytest caplog）已掛上的 handler。
 
     Args:
         log_file: log 檔路徑。未指定時預設寫入
@@ -42,12 +44,17 @@ def setup_logging(
     """
     root = logging.getLogger()
 
-    # 防止重複加入 handler
-    if root.handlers:
-        root.handlers.clear()
+    # 只移除自己上次加過的 handler，保留外部 handler
+    for h in list(root.handlers):
+        if getattr(h, _OWN_HANDLER_ATTR, False):
+            root.removeHandler(h)
+            try:
+                h.close()
+            except Exception:
+                pass
 
     if log_file is None:
-        log_dir = os.path.join(_get_base_dir(), "log")
+        log_dir = os.path.join(get_base_dir(), "log")
         os.makedirs(log_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         suffix = f"_{request_id}" if request_id else ""
@@ -63,6 +70,7 @@ def setup_logging(
     console = logging.StreamHandler(sys.stderr)
     console.setLevel(level)
     console.setFormatter(formatter)
+    setattr(console, _OWN_HANDLER_ATTR, True)
 
     # File handler
     file_handler = logging.FileHandler(
@@ -70,6 +78,7 @@ def setup_logging(
     )
     file_handler.setLevel(level)
     file_handler.setFormatter(formatter)
+    setattr(file_handler, _OWN_HANDLER_ATTR, True)
 
     root.setLevel(level)
     root.addHandler(console)

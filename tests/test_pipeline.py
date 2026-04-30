@@ -164,3 +164,68 @@ class TestRiskPathIndependence:
         rr1, _ = pipe_no_filter.build_risk_prompt()
         rr2, _ = pipe_with_filter.build_risk_prompt()
         assert rr1["sections"] == rr2["sections"]
+
+
+class TestPeriodDatesPropagation:
+    """period_dates 應由 Pipeline 統一處理。"""
+
+    def test_pipeline_passes_period_dates_to_renderer(
+        self, report, rules, monkeypatch,
+    ):
+        captured: dict = {}
+
+        def fake_render(template, grouped, period_dates=None):
+            captured["template"] = template
+            captured["grouped"] = grouped
+            captured["period_dates"] = period_dates
+            return "rendered"
+
+        monkeypatch.setattr(
+            "risk_engine.pipeline.render_narrative_prompt",
+            fake_render,
+        )
+
+        nf = {
+            "財務結構": [
+                _nf_item(
+                    "TIBA040", "TIBA040",
+                    display_name="權益總額", unit="仟元",
+                ),
+            ],
+        }
+        pipe = ReportPipeline(
+            report=report, rules=rules,
+            narrative_prompt_template="TMPL",
+            risk_prompt_template="X",
+            narrative_filter=nf,
+            period_dates=["2024/12", "2023/12", "2022/12"],
+        )
+        grouped = pipe.filter_and_group()
+        out = pipe.build_narrative_prompt(grouped)
+
+        assert out == "rendered"
+        assert captured["period_dates"] == [
+            "2024/12", "2023/12", "2022/12",
+        ]
+
+    def test_pipeline_default_period_dates_is_none(
+        self, report, rules, monkeypatch,
+    ):
+        captured: dict = {}
+
+        def fake_render(template, grouped, period_dates=None):
+            captured["period_dates"] = period_dates
+            return ""
+
+        monkeypatch.setattr(
+            "risk_engine.pipeline.render_narrative_prompt",
+            fake_render,
+        )
+
+        pipe = ReportPipeline(
+            report=report, rules=rules,
+            narrative_prompt_template="X",
+            risk_prompt_template="X",
+        )
+        pipe.build_narrative_prompt({})
+        assert captured["period_dates"] is None
