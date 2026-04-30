@@ -17,34 +17,42 @@
 ## 專案結構
 
 ```
-risk_engine/
-├── __init__.py              # 公開 API 匯出
-├── risk_checker.py          # CLI 主入口
-├── pipeline.py              # ReportPipeline：過濾分群 + 敘事 Prompt + 風險 Prompt
-├── loader.py                # 財報 / 指標設定載入
-├── formula.py               # 安全公式求值、代碼解析、value_kind 推斷
-├── threshold.py             # 中文門檻解析（含 compound 樹建構）
-├── checker.py               # 門檻比較（策略 + 遞迴樹求值）
-├── report.py                # 報告產生、LLM 精簡格式、Prompt 精簡視圖
-├── post_rules.py            # 多規則聯合觸發（meta-rule，預留）
-├── types.py                 # TypedDict 與自訂例外
-├── constants.py             # 共用 regex（OP_PATTERN）
-├── log_config.py            # 統一 logging 設定（含 EXE 打包相容）
-├── data/
-│   ├── indicators_config_v3.json   # 範例指標設定（7大指標）
-│   ├── json/                       # 風險結果範例 JSON
-│   └── prompt/                     # 敘事 / 風險 sys & user prompt 模板
-├── tests/                   # pytest 單元測試（92 tests）
-└── utils/
-    ├── combine_prompt.py    # 將風險結果 + 敘事填入 Prompt 模板
-    ├── narrative.py         # 段落代碼擷取、敘事資料建構
-    ├── convert_indicators.py# 指標 CSV → 結構化 JSON 設定
-    ├── convert_report.py    # JSON TXT → 段落格式批次轉換
-    ├── simple_convert.py    # 單位格式化、趨勢推斷、GroupedReport 轉換
-    ├── html_to_json.py      # 財報 HTML（Big5）→ Report JSON
-    ├── csv_to_report_json.py# 多家測試案例 CSV → 個別 Report JSON
-    ├── xlsx_to_report_json.py# Excel 財報 → Report JSON
-    └── convert_to_docx.py   # 分析結果 TXT → Word 文件
+risk_engine/                          # 專案根目錄
+├── pyproject.toml                    # 套件設定（src layout + pytest 設定）
+├── conftest.py                       # 將 src/ 加入 sys.path 供 pytest 使用
+├── README.md
+├── scripts/
+│   └── risk_checker.py               # CLI 主入口
+├── src/
+│   ├── risk_engine/                  # 核心套件
+│   │   ├── __init__.py               # 公開 API 匯出
+│   │   ├── pipeline.py               # ReportPipeline：過濾分群 + 敘事 + 風險 Prompt
+│   │   ├── loader.py                 # 財報 / 指標設定載入
+│   │   ├── formula.py                # 安全公式求值、代碼解析、value_kind 推斷
+│   │   ├── threshold.py              # 中文門檻解析（含 compound 樹建構）
+│   │   ├── checker.py                # 門檻比較（策略 + 遞迴樹求值）
+│   │   ├── report.py                 # 報告產生、LLM 精簡格式、Prompt 精簡視圖
+│   │   ├── post_rules.py             # 多規則聯合觸發（meta-rule，預留）
+│   │   ├── types.py                  # TypedDict 與自訂例外
+│   │   ├── constants.py              # 共用 regex（OP_PATTERN）
+│   │   └── log_config.py             # 統一 logging 設定（含 EXE 打包相容）
+│   └── utils/                        # 輔助工具
+│       ├── combine_prompt.py         # 將風險結果 + 敘事填入 Prompt 模板
+│       ├── narrative.py              # 段落代碼擷取、敘事資料建構
+│       ├── convert_indicators.py     # 指標 CSV → 結構化 JSON 設定
+│       ├── convert_report.py         # JSON TXT → 段落格式批次轉換
+│       ├── simple_convert.py         # 單位格式化、趨勢推斷、GroupedReport 轉換
+│       ├── html_to_json.py           # 財報 HTML（Big5）→ Report JSON
+│       ├── csv_to_report_json.py     # 多家測試案例 CSV → 個別 Report JSON
+│       ├── xlsx_to_report_json.py    # Excel 財報 → Report JSON
+│       ├── xlsx_to_indicators.py     # Excel 指標 → 設定 JSON
+│       └── convert_to_docx.py        # 分析結果 TXT → Word 文件
+├── tests/                            # pytest 單元測試
+└── data/
+    ├── indicators_config_v3.json     # 範例指標設定（7大指標）
+    ├── tag_table.csv
+    ├── json/                         # 風險結果範例 JSON
+    └── prompt/                       # 敘事 / 風險 sys & user prompt 模板
 ```
 
 ---
@@ -100,7 +108,7 @@ risk_engine/
 ### 1. CLI 直接執行
 
 ```bash
-python risk_checker.py \
+python scripts/risk_checker.py \
     --report 財報.csv \
     --config data/indicator.json \
     --industry 7大指標 \

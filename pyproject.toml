@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "risk_engine"
+version = "0.1.0"
+description = "財報風險判斷引擎"
+requires-python = ">=3.10"
+
+[project.scripts]
+risk-checker = "scripts.risk_checker:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["risk_engine*", "utils*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
