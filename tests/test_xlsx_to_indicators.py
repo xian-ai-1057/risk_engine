@@ -134,18 +134,22 @@ class TestParseFilterSheet:
     def test_codes_dedup(self):
         df = _make_filter_df()
         result = xi.parse_filter_sheet(df)
-        codes = [
-            item["code"]
+        keys = [
+            item["key"]
             for item in result["7大指標"]["財務結構"]
         ]
-        assert codes == ["TIBA009", "TIBA040"]
+        assert keys == ["TIBA009", "TIBA040"]
 
-    def test_code_name_pair(self):
+    def test_item_shape_legacy_columns_only(self):
+        """S1.1：只給 4 必填欄位 → fallback 行為。"""
         df = _make_filter_df()
         result = xi.parse_filter_sheet(df)
         item = result["7大指標"]["財務結構"][0]
         assert item == {
-            "code": "TIBA009", "name": "非流動資產",
+            "key": "TIBA009",
+            "display_name": "非流動資產",
+            "expression": "TIBA009",
+            "unit": "",
         }
 
     def test_multi_industry_split(self):
@@ -172,6 +176,100 @@ class TestParseFilterSheet:
         df = pd.DataFrame([{"產業別": "X"}])
         with pytest.raises(ValueError, match="缺少欄位"):
             xi.parse_filter_sheet(df)
+
+    # ── 新 schema 行為（S1.1〜S1.4） ────────────────
+
+    def test_filter_with_formula_column(self):
+        """S1.3：填 公式 → expression 透傳，key 仍取 code。"""
+        df = pd.DataFrame([{
+            "產業別": "7大指標",
+            "段落": "財務結構",
+            "會計科目": "(銀行借款+短期票券+公司債)/權益總額",
+            "會計科目代碼": "TIBB004",
+            "公式": "TIBB004*TIBA040/100",
+            "顯示名稱": "銀行借款+短期票券+公司債",
+            "單位": "仟元",
+        }])
+        result = xi.parse_filter_sheet(df)
+        item = result["7大指標"]["財務結構"][0]
+        assert item == {
+            "key": "TIBB004",
+            "display_name": "銀行借款+短期票券+公司債",
+            "expression": "TIBB004*TIBA040/100",
+            "unit": "仟元",
+        }
+
+    def test_filter_unit_and_display_name_override(self):
+        """S1.3：選填欄位填值時透傳到 item。"""
+        df = pd.DataFrame([{
+            "產業別": "7大指標",
+            "段落": "財務結構",
+            "會計科目": "權益總額",
+            "會計科目代碼": "TIBA040",
+            "公式": "",
+            "顯示名稱": "自訂顯示名稱",
+            "單位": "億元",
+        }])
+        result = xi.parse_filter_sheet(df)
+        item = result["7大指標"]["財務結構"][0]
+        assert item["display_name"] == "自訂顯示名稱"
+        assert item["unit"] == "億元"
+        assert item["expression"] == "TIBA040"  # 公式留白 fallback
+
+    def test_filter_key_collision_appends_suffix(self):
+        """S1.3：同段落同 code 不同 expression → key 加後綴。"""
+        df = pd.DataFrame([
+            {
+                "產業別": "7大指標",
+                "段落": "償債能力",
+                "會計科目": "速動比率",
+                "會計科目代碼": "TIBB011",
+                "公式": "",
+                "顯示名稱": "",
+                "單位": "",
+            },
+            {
+                "產業別": "7大指標",
+                "段落": "償債能力",
+                "會計科目": "速動比率變動",
+                "會計科目代碼": "TIBB011",
+                "公式": "TIBB011-TIBB011_PRV",
+                "顯示名稱": "速動比率變動量",
+                "單位": "%",
+            },
+            {
+                "產業別": "7大指標",
+                "段落": "償債能力",
+                "會計科目": "另一個變動",
+                "會計科目代碼": "TIBB011",
+                "公式": "TIBB011*2",
+                "顯示名稱": "兩倍速動比率",
+                "單位": "%",
+            },
+        ])
+        result = xi.parse_filter_sheet(df)
+        items = result["7大指標"]["償債能力"]
+        keys = [i["key"] for i in items]
+        assert keys == ["TIBB011", "TIBB011_2", "TIBB011_3"]
+        assert items[1]["expression"] == "TIBB011-TIBB011_PRV"
+        assert items[2]["expression"] == "TIBB011*2"
+
+    def test_filter_dedup_exact_duplicate(self):
+        """S1.4：完全重複的 (code, expression) 略過。"""
+        df = pd.DataFrame([
+            {
+                "產業別": "7大指標", "段落": "財務結構",
+                "會計科目": "權益總額", "會計科目代碼": "TIBA040",
+                "公式": "", "顯示名稱": "", "單位": "",
+            },
+            {
+                "產業別": "7大指標", "段落": "財務結構",
+                "會計科目": "權益總額", "會計科目代碼": "TIBA040",
+                "公式": "", "顯示名稱": "", "單位": "",
+            },
+        ])
+        result = xi.parse_filter_sheet(df)
+        assert len(result["7大指標"]["財務結構"]) == 1
 
 
 # ── convert (end-to-end) ────────────────────────────

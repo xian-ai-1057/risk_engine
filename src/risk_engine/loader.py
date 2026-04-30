@@ -67,14 +67,23 @@ def _load_report_json(path: str) -> types.Report:
 
     預期格式為 {代碼: {FA_CANME, 單位,
     Current, Period_2, Period_3}, ...}。
+
+    非 dict 值（例如 meta key `_period_dates` 為 list）
+    會被忽略，方便財報 JSON 內夾帶展示用 metadata。
     """
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
 
-    return {
-        code: _build_report_row(data)
-        for code, data in raw.items()
-    }
+    report: types.Report = {}
+    for code, data in raw.items():
+        if not isinstance(data, dict):
+            logger.debug(
+                "略過非 dict 值: %s (%s)",
+                code, type(data).__name__,
+            )
+            continue
+        report[code] = _build_report_row(data)
+    return report
 
 
 def load_report(path: str) -> types.Report:
