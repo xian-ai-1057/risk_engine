@@ -1,12 +1,12 @@
 {
-    "customer_id": "Samson Paper Company_單一",
-    "report_date": "20260424",
+    "customer_id": "43228809_123_合併",
+    "report_date": "20260416",
     "industry": "7大指標",
     "summary": {
       "total_sections": 5,
       "total_indicators": 18,
-      "triggered_count": 5,
-      "not_triggered_count": 20,
+      "triggered_count": 2,
+      "not_triggered_count": 23,
       "missing_count": 1,
       "total_rules": 26
     },
@@ -15,8 +15,8 @@
         {
           "indicator_name": "固定長期適合率",
           "indicator_code": "(TIBA009-TIBA014)/(TIBA040+TIBA026)",
-          "current_value": 0.55,
-          "current_display": "0.55倍",
+          "current_value": 0.33,
+          "current_display": "0.33倍",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -27,36 +27,36 @@
               "name": "非流動資產",
               "period": "Current",
               "period_label": "當期",
-              "value": 924470.0,
+              "value": 17248221.0,
               "unit": "仟元",
-              "display": "NTD 924,470仟元"
+              "display": "NTD 172.48億元"
             },
             {
               "code": "TIBA014",
               "name": "其他非流動資產",
               "period": "Current",
               "period_label": "當期",
-              "value": 4084.0,
+              "value": 2627562.0,
               "unit": "仟元",
-              "display": "NTD 4,084仟元"
+              "display": "NTD 26.28億元"
             },
             {
               "code": "TIBA040",
               "name": "權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 1099433.0,
+              "value": 34682804.0,
               "unit": "仟元",
-              "display": "NTD 1,099,433仟元"
+              "display": "NTD 346.83億元"
             },
             {
               "code": "TIBA026",
               "name": "非流動負債",
               "period": "Current",
               "period_label": "當期",
-              "value": 571743.0,
+              "value": 9066617.0,
               "unit": "仟元",
-              "display": "NTD 571,743仟元"
+              "display": "NTD 90.67億元"
             }
           ],
           "taggings": [
@@ -71,8 +71,8 @@
         {
           "indicator_name": "",
           "indicator_code": "TIBA040",
-          "current_value": 1099433.0,
-          "current_display": "NTD 1,099,433仟元",
+          "current_value": 34682804.0,
+          "current_display": "NTD 346.83億元",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -83,9 +83,9 @@
               "name": "權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 1099433.0,
+              "value": 34682804.0,
               "unit": "仟元",
-              "display": "NTD 1,099,433仟元"
+              "display": "NTD 346.83億元"
             }
           ],
           "taggings": [
@@ -100,8 +100,8 @@
         {
           "indicator_name": "",
           "indicator_code": "(TIBA040-TIBA035*0.5)",
-          "current_value": 1085182.5,
-          "current_display": "NTD 1,085,182仟元",
+          "current_value": 34466588.0,
+          "current_display": "NTD 344.67億元",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -112,18 +112,18 @@
               "name": "權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 1099433.0,
+              "value": 34682804.0,
               "unit": "仟元",
-              "display": "NTD 1,099,433仟元"
+              "display": "NTD 346.83億元"
             },
             {
               "code": "TIBA035",
               "name": "股本",
               "period": "Current",
               "period_label": "當期",
-              "value": 28501.0,
+              "value": 432432.0,
               "unit": "仟元",
-              "display": "NTD 28,501仟元"
+              "display": "NTD 4.32億元"
             }
           ],
           "taggings": [
@@ -138,8 +138,8 @@
         {
           "indicator_name": "負債權益比",
           "indicator_code": "TIBB002",
-          "current_value": 2.75,
-          "current_display": "2.75%",
+          "current_value": 70.94,
+          "current_display": "70.94%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -150,9 +150,9 @@
               "name": "負債總額/權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 2.75,
+              "value": 70.94,
               "unit": "%",
-              "display": "2.75%"
+              "display": "70.94%"
             }
           ],
           "taggings": [
@@ -167,8 +167,8 @@
         {
           "indicator_name": "負債權益比",
           "indicator_code": "TIBB002-TIBB002_PRV",
-          "current_value": 0.02,
-          "current_display": "0.02%",
+          "current_value": -5.81,
+          "current_display": "-5.81%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_abs",
@@ -179,18 +179,18 @@
               "name": "負債總額/權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 2.75,
+              "value": 70.94,
               "unit": "%",
-              "display": "2.75%"
+              "display": "70.94%"
             },
             {
               "code": "TIBB002",
               "name": "負債總額/權益總額",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 2.73,
+              "value": 76.75,
               "unit": "%",
-              "display": "2.73%"
+              "display": "76.75%"
             }
           ],
           "taggings": [
@@ -205,8 +205,8 @@
         {
           "indicator_name": "銀借淨值比",
           "indicator_code": "TIBB004",
-          "current_value": 2.06,
-          "current_display": "2.06%",
+          "current_value": 9.12,
+          "current_display": "9.12%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -217,9 +217,9 @@
               "name": "(銀行借款+短期票券+公司債)/權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 2.06,
+              "value": 9.12,
               "unit": "%",
-              "display": "2.06%"
+              "display": "9.12%"
             }
           ],
           "taggings": [
@@ -234,8 +234,8 @@
         {
           "indicator_name": "銀借淨值比",
           "indicator_code": "TIBB004-TIBB004_PRV",
-          "current_value": 0.2,
-          "current_display": "0.20%",
+          "current_value": -1.1,
+          "current_display": "-1.10%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_abs",
@@ -246,18 +246,18 @@
               "name": "(銀行借款+短期票券+公司債)/權益總額",
               "period": "Current",
               "period_label": "當期",
-              "value": 2.06,
+              "value": 9.12,
               "unit": "%",
-              "display": "2.06%"
+              "display": "9.12%"
             },
             {
               "code": "TIBB004",
               "name": "(銀行借款+短期票券+公司債)/權益總額",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 1.86,
+              "value": 10.22,
               "unit": "%",
-              "display": "1.86%"
+              "display": "10.22%"
             }
           ],
           "taggings": [
@@ -274,8 +274,8 @@
         {
           "indicator_name": "",
           "indicator_code": "TIBC014",
-          "current_value": -287399.0,
-          "current_display": "-NTD 287,399仟元",
+          "current_value": 1436026.0,
+          "current_display": "NTD 14.36億元",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -286,25 +286,25 @@
               "name": "營業活動之淨現金流入(流出)",
               "period": "Current",
               "period_label": "當期",
-              "value": -287399.0,
+              "value": 1436026.0,
               "unit": "仟元",
-              "display": "-NTD 287,399仟元"
+              "display": "NTD 14.36億元"
             }
           ],
           "taggings": [
             {
               "tag_id": "TIBC014_TAG1",
-              "status": "triggered",
+              "status": "not_triggered",
               "threshold": "<0.0",
-              "description": "本期營業活動呈現金流出"
+              "description": "不滿足條件"
             }
           ]
         },
         {
           "indicator_name": "自由現金流量",
           "indicator_code": "(TIBC014+TIBC014_PRV+TIBC014_PRV2)+(TIBC022+TIBC022_PRV+TIBC022_PRV2)",
-          "current_value": -430251.0,
-          "current_display": "-NTD 430,251仟元",
+          "current_value": 12035386.0,
+          "current_display": "NTD 120.35億元",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "multi_period_sum",
@@ -315,62 +315,62 @@
               "name": "營業活動之淨現金流入(流出)",
               "period": "Current",
               "period_label": "當期",
-              "value": -287399.0,
+              "value": 1436026.0,
               "unit": "仟元",
-              "display": "-NTD 287,399仟元"
+              "display": "NTD 14.36億元"
             },
             {
               "code": "TIBC014",
               "name": "營業活動之淨現金流入(流出)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": -382965.0,
+              "value": 6692414.0,
               "unit": "仟元",
-              "display": "-NTD 382,965仟元"
+              "display": "NTD 66.92億元"
             },
             {
               "code": "TIBC014",
               "name": "營業活動之淨現金流入(流出)",
               "period": "Period_3",
               "period_label": "前前期",
-              "value": 246680.0,
+              "value": 5996292.0,
               "unit": "仟元",
-              "display": "NTD 246,680仟元"
+              "display": "NTD 59.96億元"
             },
             {
               "code": "TIBC022",
               "name": "投資活動之淨現金流入(流出)",
               "period": "Current",
               "period_label": "當期",
-              "value": -4461.0,
+              "value": 198773.0,
               "unit": "仟元",
-              "display": "-NTD 4,461仟元"
+              "display": "NTD 1.99億元"
             },
             {
               "code": "TIBC022",
               "name": "投資活動之淨現金流入(流出)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": -1553.0,
+              "value": -3094764.0,
               "unit": "仟元",
-              "display": "-NTD 1,553仟元"
+              "display": "-NTD 30.95億元"
             },
             {
               "code": "TIBC022",
               "name": "投資活動之淨現金流入(流出)",
               "period": "Period_3",
               "period_label": "前前期",
-              "value": -553.0,
+              "value": 806645.0,
               "unit": "仟元",
-              "display": "-NTD 553仟元"
+              "display": "NTD 8.07億元"
             }
           ],
           "taggings": [
             {
               "tag_id": "FCF_TAG1",
-              "status": "triggered",
+              "status": "not_triggered",
               "threshold": "<0.0",
-              "description": "本業現金流不足以支應公司長期發展所需資金"
+              "description": "不滿足條件"
             }
           ]
         }
@@ -379,8 +379,8 @@
         {
           "indicator_name": "應收帳款週轉率 / 週轉天數",
           "indicator_code": "TIBB011-TIBB011_PRV",
-          "current_value": 3.77,
-          "current_display": "3.77天",
+          "current_value": 37.36,
+          "current_display": "37.36天",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_abs",
@@ -391,18 +391,18 @@
               "name": "365/(營業收入/應收票據及帳款)",
               "period": "Current",
               "period_label": "當期",
-              "value": 71.37,
+              "value": 125.56,
               "unit": "天",
-              "display": "71.37天"
+              "display": "125.56天"
             },
             {
               "code": "TIBB011",
               "name": "365/(營業收入/應收票據及帳款)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 67.6,
+              "value": 88.2,
               "unit": "天",
-              "display": "67.60天"
+              "display": "88.20天"
             }
           ],
           "taggings": [
@@ -417,8 +417,8 @@
         {
           "indicator_name": "應收帳款週轉率 / 週轉天數",
           "indicator_code": "TIBB011",
-          "current_value": 71.37,
-          "current_display": "71.37天",
+          "current_value": 125.56,
+          "current_display": "125.56天",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -429,9 +429,9 @@
               "name": "365/(營業收入/應收票據及帳款)",
               "period": "Current",
               "period_label": "當期",
-              "value": 71.37,
+              "value": 125.56,
               "unit": "天",
-              "display": "71.37天"
+              "display": "125.56天"
             }
           ],
           "taggings": [
@@ -462,21 +462,21 @@
               "condition_details": [
                 {
                   "formula": "(TIBB011-TIBB011_PRV)",
-                  "value": 3.77,
+                  "value": 37.36,
                   "operator": ">=",
                   "threshold": 45.0,
                   "result": false,
                   "subject": "365/(營業收入/應收票據及帳款)",
-                  "display": "3.77天"
+                  "display": "37.36天"
                 },
                 {
                   "formula": "(TIBA041-TIBA041_PRV)/TIBA041_PRV*100",
-                  "value": -20.51,
+                  "value": -81.13,
                   "operator": "<=",
                   "threshold": 0.0,
                   "result": true,
                   "subject": "營業收入",
-                  "display": "-20.51%"
+                  "display": "-81.13%"
                 }
               ]
             }
@@ -485,8 +485,8 @@
         {
           "indicator_name": "存貨週轉率 / 存貨週轉天數",
           "indicator_code": "TIBB013-TIBB013_PRV",
-          "current_value": 16.73,
-          "current_display": "16.73天",
+          "current_value": 11.52,
+          "current_display": "11.52天",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_abs",
@@ -497,18 +497,18 @@
               "name": "365/(營業成本/存貨)",
               "period": "Current",
               "period_label": "當期",
-              "value": 60.62,
+              "value": 133.4,
               "unit": "天",
-              "display": "60.62天"
+              "display": "133.40天"
             },
             {
               "code": "TIBB013",
               "name": "365/(營業成本/存貨)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 43.89,
+              "value": 121.88,
               "unit": "天",
-              "display": "43.89天"
+              "display": "121.88天"
             }
           ],
           "taggings": [
@@ -539,21 +539,21 @@
               "condition_details": [
                 {
                   "formula": "(TIBA006-TIBA006_PRV)/TIBA006_PRV*100",
-                  "value": 7.9,
+                  "value": -14.02,
                   "operator": ">",
                   "threshold": 10.0,
                   "result": false,
                   "subject": "存貨",
-                  "display": "7.90%"
+                  "display": "-14.02%"
                 },
                 {
                   "formula": "(TIBA041-TIBA041_PRV)/TIBA041_PRV*100",
-                  "value": -20.51,
+                  "value": -81.13,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": true,
                   "subject": "營業收入",
-                  "display": "-20.51%"
+                  "display": "-81.13%"
                 }
               ]
             }
@@ -562,8 +562,8 @@
         {
           "indicator_name": "存貨週轉率 / 存貨週轉天數",
           "indicator_code": "TIBB013",
-          "current_value": 60.62,
-          "current_display": "60.62天",
+          "current_value": 133.4,
+          "current_display": "133.40天",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -574,9 +574,9 @@
               "name": "365/(營業成本/存貨)",
               "period": "Current",
               "period_label": "當期",
-              "value": 60.62,
+              "value": 133.4,
               "unit": "天",
-              "display": "60.62天"
+              "display": "133.40天"
             }
           ],
           "taggings": [
@@ -591,8 +591,8 @@
         {
           "indicator_name": "",
           "indicator_code": "TIBB013+TIBB011-TIBB012",
-          "current_value": 5.38,
-          "current_display": "5.38天",
+          "current_value": 126.09,
+          "current_display": "126.09天",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -603,27 +603,27 @@
               "name": "365/(營業成本/存貨)",
               "period": "Current",
               "period_label": "當期",
-              "value": 60.62,
+              "value": 133.4,
               "unit": "天",
-              "display": "60.62天"
+              "display": "133.40天"
             },
             {
               "code": "TIBB011",
               "name": "365/(營業收入/應收票據及帳款)",
               "period": "Current",
               "period_label": "當期",
-              "value": 71.37,
+              "value": 125.56,
               "unit": "天",
-              "display": "71.37天"
+              "display": "125.56天"
             },
             {
               "code": "TIBB012",
               "name": "365/(營業成本/應付票據及帳款)",
               "period": "Current",
               "period_label": "當期",
-              "value": 126.61,
+              "value": 132.87,
               "unit": "天",
-              "display": "126.61天"
+              "display": "132.87天"
             }
           ],
           "taggings": [
@@ -638,8 +638,8 @@
         {
           "indicator_name": "營運周轉天期",
           "indicator_code": "(TIBB013+TIBB011-TIBB012)-(TIBB013_PRV+TIBB011_PRV-TIBB012_PRV)",
-          "current_value": 57.28,
-          "current_display": "57.28天",
+          "current_value": 25.44,
+          "current_display": "25.44天",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_abs",
@@ -650,62 +650,62 @@
               "name": "365/(營業成本/存貨)",
               "period": "Current",
               "period_label": "當期",
-              "value": 60.62,
+              "value": 133.4,
               "unit": "天",
-              "display": "60.62天"
+              "display": "133.40天"
             },
             {
               "code": "TIBB011",
               "name": "365/(營業收入/應收票據及帳款)",
               "period": "Current",
               "period_label": "當期",
-              "value": 71.37,
+              "value": 125.56,
               "unit": "天",
-              "display": "71.37天"
+              "display": "125.56天"
             },
             {
               "code": "TIBB012",
               "name": "365/(營業成本/應付票據及帳款)",
               "period": "Current",
               "period_label": "當期",
-              "value": 126.61,
+              "value": 132.87,
               "unit": "天",
-              "display": "126.61天"
+              "display": "132.87天"
             },
             {
               "code": "TIBB013",
               "name": "365/(營業成本/存貨)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 43.89,
+              "value": 121.88,
               "unit": "天",
-              "display": "43.89天"
+              "display": "121.88天"
             },
             {
               "code": "TIBB011",
               "name": "365/(營業收入/應收票據及帳款)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 67.6,
+              "value": 88.2,
               "unit": "天",
-              "display": "67.60天"
+              "display": "88.20天"
             },
             {
               "code": "TIBB012",
               "name": "365/(營業成本/應付票據及帳款)",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 163.39,
+              "value": 109.43,
               "unit": "天",
-              "display": "163.39天"
+              "display": "109.43天"
             }
           ],
           "taggings": [
             {
               "tag_id": "CCC_TAG2",
-              "status": "triggered",
+              "status": "not_triggered",
               "threshold": ">=45.0",
-              "description": "營運周轉天期拉長N天，顯示營運資金缺口增加"
+              "description": "不滿足條件"
             }
           ]
         }
@@ -714,8 +714,8 @@
         {
           "indicator_name": "利息保障倍數",
           "indicator_code": "(TIBA049+TIBA047+TIBC003)/TIBA047",
-          "current_value": 2.05,
-          "current_display": "2.05倍",
+          "current_value": 16.11,
+          "current_display": "16.11倍",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -726,27 +726,27 @@
               "name": "稅前淨利",
               "period": "Current",
               "period_label": "當期",
-              "value": 76704.0,
+              "value": 782114.0,
               "unit": "仟元",
-              "display": "NTD 76,704仟元"
+              "display": "NTD 7.82億元"
             },
             {
               "code": "TIBA047",
               "name": "利息費用",
               "period": "Current",
               "period_label": "當期",
-              "value": 78762.0,
+              "value": 83476.0,
               "unit": "仟元",
-              "display": "NTD 78,762仟元"
+              "display": "NTD 0.83億元"
             },
             {
               "code": "TIBC003",
               "name": "折舊及各項攤銷",
               "period": "Current",
               "period_label": "當期",
-              "value": 6032.0,
+              "value": 479558.0,
               "unit": "仟元",
-              "display": "NTD 6,032仟元"
+              "display": "NTD 4.80億元"
             }
           ],
           "taggings": [
@@ -761,8 +761,8 @@
         {
           "indicator_name": "流動比率",
           "indicator_code": "TIBB007",
-          "current_value": 1.3,
-          "current_display": "1.30%",
+          "current_value": 270.56,
+          "current_display": "270.56%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -773,25 +773,25 @@
               "name": "流動資產/流動負債",
               "period": "Current",
               "period_label": "當期",
-              "value": 1.3,
+              "value": 270.56,
               "unit": "%",
-              "display": "1.30%"
+              "display": "270.56%"
             }
           ],
           "taggings": [
             {
               "tag_id": "TIBB007_TAG1",
-              "status": "triggered",
+              "status": "not_triggered",
               "threshold": "<100.0",
-              "description": "短期償債能力不足"
+              "description": "不滿足條件"
             }
           ]
         },
         {
           "indicator_name": "短期借款比率",
           "indicator_code": "TIBB010",
-          "current_value": 0.53,
-          "current_display": "0.53%",
+          "current_value": 6.66,
+          "current_display": "6.66%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "current",
@@ -802,9 +802,9 @@
               "name": "短期銀行借款/流動資產",
               "period": "Current",
               "period_label": "當期",
-              "value": 0.53,
+              "value": 6.66,
               "unit": "%",
-              "display": "0.53%"
+              "display": "6.66%"
             }
           ],
           "taggings": [
@@ -835,21 +835,21 @@
               "condition_details": [
                 {
                   "formula": "(TIBA041-TIBA041_PRV)/TIBA041_PRV*100",
-                  "value": -20.51,
+                  "value": -81.13,
                   "operator": "<",
                   "threshold": 2.0,
                   "result": true,
                   "subject": "營業收入",
-                  "display": "-20.51%"
+                  "display": "-81.13%"
                 },
                 {
                   "formula": "(TIBA033-TIBA033_PRV)/TIBA033_PRV*100",
-                  "value": 3.87,
+                  "value": -1.6,
                   "operator": ">",
                   "threshold": 5.0,
                   "result": false,
                   "subject": "負債總額",
-                  "display": "3.87%"
+                  "display": "-1.60%"
                 }
               ]
             }
@@ -860,8 +860,8 @@
         {
           "indicator_name": "毛利率較前期變動",
           "indicator_code": "(TIBB018-TIBB018_PRV)/TIBB018_PRV",
-          "current_value": 0.12,
-          "current_display": "0.12%",
+          "current_value": -0.18,
+          "current_display": "-0.18%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_pct",
@@ -872,34 +872,34 @@
               "name": "營業毛利/營業收入",
               "period": "Current",
               "period_label": "當期",
-              "value": 0.14,
+              "value": 15.51,
               "unit": "%",
-              "display": "0.14%"
+              "display": "15.51%"
             },
             {
               "code": "TIBB018",
               "name": "營業毛利/營業收入",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 0.13,
+              "value": 18.83,
               "unit": "%",
-              "display": "0.13%"
+              "display": "18.83%"
             }
           ],
           "taggings": [
             {
               "tag_id": "TIBB018_TAG1",
-              "status": "not_triggered",
+              "status": "triggered",
               "threshold": "<0.0",
-              "description": "不滿足條件"
+              "description": "毛利率衰退"
             }
           ]
         },
         {
           "indicator_name": "營業利益率",
           "indicator_code": "TIBB019-TIBB019_PRV",
-          "current_value": -0.0,
-          "current_display": "-0.00%",
+          "current_value": -6.32,
+          "current_display": "-6.32%",
           "previous_value": null,
           "previous_display": null,
           "value_kind": "period_change_abs",
@@ -910,18 +910,18 @@
               "name": "營業利益/營業收入",
               "period": "Current",
               "period_label": "當期",
-              "value": 0.03,
+              "value": 3.82,
               "unit": "%",
-              "display": "0.03%"
+              "display": "3.82%"
             },
             {
               "code": "TIBB019",
               "name": "營業利益/營業收入",
               "period": "Period_2",
               "period_label": "前期",
-              "value": 0.03,
+              "value": 10.14,
               "unit": "%",
-              "display": "0.03%"
+              "display": "10.14%"
             }
           ],
           "taggings": [
@@ -952,30 +952,30 @@
               "condition_details": [
                 {
                   "formula": "TIBB019",
-                  "value": 0.03,
+                  "value": 3.82,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": false,
                   "subject": "營業利益/營業收入",
-                  "display": "0.03%"
+                  "display": "3.82%"
                 },
                 {
                   "formula": "TIBB019_PRV",
-                  "value": 0.03,
+                  "value": 10.14,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": false,
                   "subject": "營業利益/營業收入",
-                  "display": "0.03%"
+                  "display": "10.14%"
                 },
                 {
                   "formula": "TIBB019_PRV2",
-                  "value": 0.01,
+                  "value": 8.52,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": false,
                   "subject": "營業利益/營業收入",
-                  "display": "0.01%"
+                  "display": "8.52%"
                 }
               ]
             }
@@ -1000,30 +1000,30 @@
               "condition_details": [
                 {
                   "formula": "TIBB018",
-                  "value": 0.14,
+                  "value": 15.51,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": false,
                   "subject": "營業毛利/營業收入",
-                  "display": "0.14%"
+                  "display": "15.51%"
                 },
                 {
                   "formula": "TIBB018_PRV",
-                  "value": 0.13,
+                  "value": 18.83,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": false,
                   "subject": "營業毛利/營業收入",
-                  "display": "0.13%"
+                  "display": "18.83%"
                 },
                 {
                   "formula": "TIBB018_PRV2",
-                  "value": 0.13,
+                  "value": 17.38,
                   "operator": "<",
                   "threshold": 0.0,
                   "result": false,
                   "subject": "營業毛利/營業收入",
-                  "display": "0.13%"
+                  "display": "17.38%"
                 }
               ]
             }
@@ -1057,12 +1057,12 @@
                 },
                 {
                   "formula": "TIBC014",
-                  "value": -287399.0,
+                  "value": 1436026.0,
                   "operator": "<",
                   "threshold": 0.0,
-                  "result": true,
+                  "result": false,
                   "subject": "營業活動之淨現金流入(流出)",
-                  "display": "-NTD 287,399仟元"
+                  "display": "NTD 14.36億元"
                 }
               ]
             }
