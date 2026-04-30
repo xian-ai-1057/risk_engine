@@ -33,10 +33,14 @@ def _to_float(val: Any) -> float | None:
 
 # ── 財報載入 ────────────────────────────────────────
 
-def _build_report_row(
+def build_report_row(
     data: dict[str, Any],
 ) -> types.ReportRow:
-    """從原始 dict 建構正規化的 ReportRow。"""
+    """從原始 dict 建構正規化的 ReportRow。
+
+    Public API。供外部（如 scripts/main.py 將 HTML 解析後
+    的 dict 轉成 Report）使用，避免依賴私有實作。
+    """
     return {
         "FA_CANME": data.get("FA_CANME", ""),
         "單位": data.get("單位", ""),
@@ -44,6 +48,10 @@ def _build_report_row(
         "Period_2": _to_float(data.get("Period_2")),
         "Period_3": _to_float(data.get("Period_3")),
     }
+
+
+# 向後相容別名（內部其他模組可能仍在使用）。
+_build_report_row = build_report_row
 
 
 def _load_report_csv(path: str) -> types.Report:

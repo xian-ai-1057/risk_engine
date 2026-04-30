@@ -5,7 +5,13 @@ import tempfile
 
 import pytest
 
-from risk_engine.loader import _to_float, load_config, load_report
+from risk_engine.loader import (
+    _build_report_row,
+    _to_float,
+    build_report_row,
+    load_config,
+    load_report,
+)
 
 
 # ── _to_float ─────────────────────────────────────────
@@ -34,6 +40,40 @@ class TestToFloat:
 
     def test_negative(self):
         assert _to_float("-10.5") == -10.5
+
+
+# ── build_report_row ─────────────────────────────────
+
+class TestBuildReportRow:
+    def test_full_row(self):
+        row = build_report_row({
+            "FA_CANME": "應收帳款週轉天數",
+            "單位": "天",
+            "Current": "58.72",
+            "Period_2": 47.9,
+            "Period_3": "73.53",
+        })
+        assert row["FA_CANME"] == "應收帳款週轉天數"
+        assert row["單位"] == "天"
+        assert row["Current"] == 58.72
+        assert row["Period_2"] == 47.9
+        assert row["Period_3"] == 73.53
+
+    def test_missing_fields_defaults(self):
+        row = build_report_row({})
+        assert row["FA_CANME"] == ""
+        assert row["單位"] == ""
+        assert row["Current"] is None
+        assert row["Period_2"] is None
+        assert row["Period_3"] is None
+
+    def test_invalid_numeric_becomes_none(self):
+        row = build_report_row({"Current": "abc"})
+        assert row["Current"] is None
+
+    def test_backwards_compat_alias(self):
+        # _build_report_row 應與 build_report_row 同物件
+        assert _build_report_row is build_report_row
 
 
 # ── load_report (JSON) ───────────────────────────────

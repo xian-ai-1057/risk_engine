@@ -70,6 +70,7 @@ class ReportPipeline:
         customer_id: str = "",
         report_date: str = "",
         industry: str = "",
+        period_dates: list[str] | None = None,
     ) -> None:
         self._report = report
         self._rules = rules
@@ -79,6 +80,7 @@ class ReportPipeline:
         self._customer_id = customer_id
         self._report_date = report_date
         self._industry = industry
+        self._period_dates = period_dates
 
     # ── Step 1: 過濾 & 分群（filter-driven） ────────
 
@@ -113,6 +115,9 @@ class ReportPipeline:
     ) -> str:
         """將分群後的原始報表 JSON 填入敘事 Prompt。
 
+        若 ``__init__`` 帶入 ``period_dates``，會在此處
+        交由 ``render_narrative_prompt`` 進一步格式化日期。
+
         Args:
             grouped: filter_and_group() 的輸出。
 
@@ -121,7 +126,9 @@ class ReportPipeline:
         """
         logger.info("開始建構敘事 Prompt")
         return render_narrative_prompt(
-            self._narrative_template, grouped,
+            self._narrative_template,
+            grouped,
+            period_dates=self._period_dates,
         )
 
     # ── Step 2b: 風險判定 + Prompt 合併（部分二）────
