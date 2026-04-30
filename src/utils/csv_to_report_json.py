@@ -12,6 +12,8 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
+from risk_engine.loader import to_float
+
 BASE_DIR = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
@@ -25,17 +27,6 @@ def _normalize_id(raw_id: str) -> str:
     """移除前導零以便比對統一編號。"""
     stripped = raw_id.strip().lstrip("0")
     return stripped or raw_id.strip()
-
-
-def _to_float(val: str) -> float | None:
-    """金額字串轉 float，空白回傳 None。"""
-    val = val.strip()
-    if not val:
-        return None
-    try:
-        return float(val)
-    except ValueError:
-        return None
 
 
 def _parse_date(date_str: str) -> datetime:
@@ -202,7 +193,7 @@ def build_report_json(
         row: dict = {"FA_CANME": fa_canme, "單位": unit}
         for label in period_labels:
             if label in period_data and code in period_data[label]:
-                row[label] = _to_float(period_data[label][code]["金額"])
+                row[label] = to_float(period_data[label][code]["金額"])
             else:
                 row[label] = None
 
@@ -215,6 +206,15 @@ def build_report_json(
 
 
 def main():
+    """批次轉換：自 50 家測試案例 CSV 抽取目標公司，輸出 Report JSON。
+
+    流程：
+        1. 讀取 ``測試案例名單.csv`` 取得目標公司統一編號。
+        2. 讀取 ``tag_table.csv`` 取得各會計代碼的單位。
+        3. 讀取 ``50家測試案例.csv`` 過濾出目標公司資料。
+        4. 對每家公司、每個 ``單一/合併`` 類型分別挑選最多 3 期，
+           輸出至 ``data/report/json/{統編}_{公司名稱}_{類型}.json``。
+    """
     # 1. 載入目標公司
     targets = load_target_companies(COMPANY_LIST)
     target_nids = set(targets.keys())

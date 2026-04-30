@@ -16,8 +16,20 @@ logger = logging.getLogger(__name__)
 
 # ── 數值轉換 ────────────────────────────────────────
 
-def _to_float(val: Any) -> float | None:
-    """將值轉 float，空值或無法轉換回傳 None。"""
+def to_float(val: Any) -> float | None:
+    """將任意值轉換為 ``float``。
+
+    供財報載入與外部 CSV/Excel 轉換器共用，統一空值與
+    無法解析時的處理規則。
+
+    Args:
+        val: 可為 ``None``、``int``、``float``、``str``。
+
+    Returns:
+        - 數值（int/float）：直接轉 float。
+        - 字串：先 strip，空字串回傳 ``None``，無法 parse 回傳 ``None``。
+        - ``None``：回傳 ``None``。
+    """
     if val is None:
         return None
     if isinstance(val, (int, float)):
@@ -40,9 +52,9 @@ def _build_report_row(
     return {
         "FA_CANME": data.get("FA_CANME", ""),
         "單位": data.get("單位", ""),
-        "Current": _to_float(data.get("Current")),
-        "Period_2": _to_float(data.get("Period_2")),
-        "Period_3": _to_float(data.get("Period_3")),
+        "Current": to_float(data.get("Current")),
+        "Period_2": to_float(data.get("Period_2")),
+        "Period_3": to_float(data.get("Period_3")),
     }
 
 

@@ -134,6 +134,17 @@ def build_report(
 
 
 def main() -> None:
+    """CLI 入口：將單一公司 Excel 財報轉為 Report JSON。
+
+    參數：
+        argv[1]：Excel 檔路徑（必填，檔名格式 ``公司名_單一|合併.xlsx``）。
+        argv[2]：``tag_table.csv`` 路徑（選填，預設使用內建路徑）。
+        argv[3]：輸出資料夾（選填，預設目前目錄）。
+
+    輸出檔名為 ``{公司名稱}_{單一|合併}.json``，內含每個會計代碼的
+    ``FA_CANME``、``單位``、三期金額（``Current/Period_2/Period_3``）
+    及 ``_period_dates`` metadata。
+    """
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)

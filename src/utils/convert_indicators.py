@@ -1,7 +1,10 @@
 """將 指標_orig.csv 轉換為結構化 JSON 設定檔。
 
 轉換後的 JSON 讓 risk_checker.py 只需做
-「查值 → 算式 → 比大小」，不用解析中文門檻。
+「查值 → 算式 → 比大小」，不必再解析中文門檻。
+
+門檻字串解析直接重用 ``risk_engine.threshold.parse_threshold``，
+保證寫入設定檔的格式與執行時讀回的格式一致。
 
 Usage:
     python convert_indicators.py 指標_orig.csv -o indicators_config.json
@@ -9,208 +12,12 @@ Usage:
 import csv
 import json
 import logging
-import re
 import sys
 from typing import Any
 
+from risk_engine.threshold import parse_threshold
+
 logger = logging.getLogger(__name__)
-
-
-# ── 文字正規化 ──────────────────────────────────────
-
-def _normalize(text: str) -> str:
-    """全形符號轉半形、去除多餘空白。"""
-    mapping = {"＞": ">", "＜": "<", "＝": "="}
-    for full, half in mapping.items():
-        text = text.replace(full, half)
-    return text.strip()
-
-
-# ── compound 子條件解析 ─────────────────────────────
-
-from risk_engine.constants import OP_PATTERN as _OP_PATTERN
-
-
-def _parse_sub_condition(expr: str) -> dict[str, Any]:
-    """解析單一子條件表達式。
-
-    格式: "公式 運算子 數值"
-    範例:
-      "TIBB011 - TIBB011_PRV >= 30"
-      "TIBB017 <= 0"
-      "TIBA041/(TIBA004+TIBA005) >= 6"
-
-    Args:
-        expr: 去除外層括號後的子條件字串。
-
-    Returns:
-        {"value_formula": str,
-         "operator": str, "threshold": float}
-    """
-    expr = expr.strip()
-    # 去除最外層括號（如有）
-    if expr.startswith("(") and expr.endswith(")"):
-        # 確認是完整包覆的括號才去除
-        depth = 0
-        is_wrapper = True
-        for i, ch in enumerate(expr):
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                depth -= 1
-            if depth == 0 and i < len(expr) - 1:
-                is_wrapper = False
-                break
-        if is_wrapper:
-            expr = expr[1:-1].strip()
-
-    # 從右邊找比較運算子（避免與公式中的 - 混淆）
-    matches = list(_OP_PATTERN.finditer(expr))
-    if not matches:
-        return {
-            "node_type": "condition",
-            "value_formula": expr,
-            "operator": "",
-            "threshold": 0.0,
-            "_parse_error": True,
-        }
-
-    last_match = matches[-1]
-    formula = expr[:last_match.start()].strip()
-    operator = last_match.group(1)
-    threshold_str = expr[last_match.end():].strip()
-
-    try:
-        threshold_val = float(threshold_str)
-    except ValueError:
-        threshold_val = 0.0
-
-    return {
-        "node_type": "condition",
-        "value_formula": formula,
-        "operator": operator,
-        "threshold": threshold_val,
-    }
-
-
-def _parse_compound(text: str) -> dict[str, Any]:
-    """解析 AND/OR 複合條件為 condition_tree。
-
-    格式:
-      "(TIBB011 - TIBB011_PRV >= 30) AND TIBB017 <= 0"
-      "TIBA041/(TIBA004+TIBA005) >= 6 OR TIBB011 <= 60"
-
-    Args:
-        text: 門檻值字串。
-
-    Returns:
-        {"compare_type": "compound",
-         "condition_tree": {node_type, children}}
-    """
-    parts = re.split(r"\s+(AND|OR)\s+", text)
-    children: list[dict[str, Any]] = []
-    operators: list[str] = []
-
-    for part in parts:
-        part = part.strip()
-        if part in ("AND", "OR"):
-            operators.append(part)
-        elif part:
-            children.append(
-                _parse_sub_condition(part)
-            )
-
-    if len(children) == 1:
-        tree = children[0]
-    else:
-        op = operators[0].lower() if operators else "and"
-        tree = {
-            "node_type": op,
-            "children": children,
-        }
-
-    return {
-        "compare_type": "compound",
-        "condition_tree": tree,
-    }
-
-
-# ── 門檻值解析（主入口） ───────────────────────────
-
-def parse_threshold(raw: str) -> dict[str, Any]:
-    """解析門檻值字串，回傳結構化 dict。
-
-    支援格式：
-      絕對值:  >150%  <100%  <0  >180天
-      前期比較: 較前期比率增加20%  較前期比率減少20%
-               較前期增加60天
-      複合條件: ... AND ...  / ... OR ...
-
-    Args:
-        raw: 原始門檻值字串（可能含多行註解）。
-
-    Returns:
-        結構化的門檻設定 dict。
-    """
-    first_line = _normalize(raw.split("\n")[0])
-
-    # ── 複合條件（含 AND / OR） ──
-    if re.search(r"\b(AND|OR)\b", first_line):
-        return _parse_compound(first_line)
-
-    # ── 前期比較：比率（百分比） ──
-    m = re.match(
-        r"較前期比率(增加|減少)(\d+(?:\.\d+)?)%",
-        first_line,
-    )
-    if m:
-        direction = (
-            "increase" if m.group(1) == "增加"
-            else "decrease"
-        )
-        return {
-            "compare_type": "period_change_pct",
-            "direction": direction,
-            "operator": ">",
-            "threshold": float(m.group(2)),
-        }
-
-    # ── 前期比較：絕對值（天數等） ──
-    m = re.match(
-        r"較前期(增加|減少)(\d+(?:\.\d+)?)(天)?",
-        first_line,
-    )
-    if m:
-        direction = (
-            "increase" if m.group(1) == "增加"
-            else "decrease"
-        )
-        return {
-            "compare_type": "period_change_abs",
-            "direction": direction,
-            "operator": ">",
-            "threshold": float(m.group(2)),
-        }
-
-    # ── 絕對門檻 ──
-    m = re.match(
-        r"([><]=?)(-?\d+(?:\.\d+)?)[%天]?$",
-        first_line,
-    )
-    if m:
-        return {
-            "compare_type": "absolute",
-            "operator": m.group(1),
-            "threshold": float(m.group(2)),
-        }
-
-    # 無法解析
-    return {
-        "compare_type": "unknown",
-        "raw": first_line,
-        "operator": "",
-        "threshold": 0.0,
-    }
 
 
 # ── CSV 讀取與轉換 ──────────────────────────────────
@@ -301,6 +108,12 @@ def convert(csv_path: str) -> dict[str, list[dict]]:
 # ── 主程式 ──────────────────────────────────────────
 
 def main() -> None:
+    """CLI 入口：讀取指標 CSV、輸出結構化 JSON 設定檔。
+
+    參數：
+        argv[1]      ：指標 CSV 路徑（必填）。
+        ``-o <path>``：輸出 JSON 路徑（選填，預設 indicators_config.json）。
+    """
     if len(sys.argv) < 2:
         print("Usage: python convert_indicators.py <csv>")
         print("       [-o output.json]")

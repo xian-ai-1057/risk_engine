@@ -1,82 +1,19 @@
 """財務數據預處理模組。
 
-將原始財務 JSON 預處理為 LLM 可直接引用的扁平格式，
-包含顯示值與趨勢判斷，讓模型完全不需要做任何數學運算。
+將原始財務 JSON 預處理為 LLM 可直接引用的扁平格式：
+為各期間數值套上單位顯示格式並補上趨勢欄位，
+讓模型完全不必做任何數學運算或單位換算。
 
-使用方式：
-    import json
-    from preprocess_financial_data import preprocess
+主要函式：
+  - ``preprocess()``：自動辨識單／雙層結構並轉換。
+  - ``convert_grouped_report()``：將 GroupedReport 與期間日期
+    展開為 ``{section: {code: {date: 顯示值, 趨勢}}}``。
 
-    with open("input.json", "r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    result = preprocess(raw)
-
-    with open("output.json", "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+數值格式化邏輯來自 ``risk_engine.constants.UNIT_FORMATTERS``，
+與 ``risk_engine.report`` 共用同一份 formatter 字典。
 """
 
-from copy import deepcopy
-
-
-# ── 金額換算 ──────────────────────────────────────
-
-
-def convert_thousand_ntd(value: float) -> str:
-    """將仟元數值換算為顯示格式字串。
-
-    Args:
-        value: 原始數值（單位：仟元）。
-
-    Returns:
-        格式化後的金額字串，如 "NTD 15.95億元"。
-
-    規則：
-        >= 10,000    → 億元（÷ 100,000，兩位小數）
-        >= 1         → 仟元（原值，千分位逗號）
-        > 0 且 < 1   → 元（× 1,000，取整）
-        0            → "NTD 0元"
-    """
-    if value == 0:
-        return "NTD 0元"
-
-    sign = "-" if value < 0 else ""
-    abs_val = abs(value)
-
-    # if abs_val >= 10_000:
-    #     converted = abs_val / 100_000
-    #     return f"{sign}NTD {converted:,.2f}億元"
-    if abs_val >= 1:
-        return f"{sign}NTD {abs_val:,.0f}仟元"
-    else:
-        converted = round(abs_val * 1_000)
-        return f"{sign}NTD {converted:,}元"
-
-
-# ── 比率/天數/倍數格式化 ─────────────────────────
-
-
-def format_percent(value: float) -> str:
-    """將小數轉為百分比字串。0.1293 → '12.93%'。"""
-    return f"{value:.2f}%"
-
-
-def format_days(value: float) -> str:
-    """格式化天數。保留兩位小數。"""
-    return f"{value:.2f}天"
-
-
-def format_times(value: float) -> str:
-    """格式化倍數。保留兩位小數。"""
-    return f"{value:.2f}倍"
-
-
-UNIT_FORMATTERS = {
-    "仟元": convert_thousand_ntd,
-    "%": format_percent,
-    "天": format_days,
-    "倍": format_times,
-}
+from risk_engine.constants import UNIT_FORMATTERS
 
 
 # ── 趨勢判斷 ─────────────────────────────────────
@@ -310,26 +247,3 @@ def convert_grouped_report(
             result[section_name] = converted
 
     return result
-
-
-if __name__ == "__main__":
-    import json
-
-    report_type = ["單一", "合併"]
-    
-    for item in report_type:
-        with open(f"DATA/JSON/財報({item})__美達工業_group.json", "r", encoding="utf-8") as f:
-            raw = json.load(f)
-
-        result = preprocess(raw)
-
-        # JSON results
-        with open(f"DATA/JSON/財報({item})__美達工業.txt", "w", encoding="utf-8") as f:
-            json.dumps(result, ensure_ascii=False, indent=4)
-
-        # For API
-        formatted = json.dumps(result, ensure_ascii=False, indent=4)
-        escaped = json.dumps(formatted, ensure_ascii=False)
-
-        with open(f"DATA/JSON/財報({item})__美達工業.txt", "w", encoding="utf-8") as f:
-            f.write(escaped)

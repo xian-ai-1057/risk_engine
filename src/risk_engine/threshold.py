@@ -11,19 +11,10 @@ compound 條件輸出遞迴樹狀結構（ConditionNode）。
 import re
 from typing import Any
 
-from risk_engine.constants import OP_PATTERN as _OP_PATTERN
-
-
-# ── 文字正規化 ──────────────────────────────────────
-
-_FULLWIDTH_MAP = {"＞": ">", "＜": "<", "＝": "="}
-
-
-def _normalize(text: str) -> str:
-    """全形符號轉半形、去除多餘空白。"""
-    for full, half in _FULLWIDTH_MAP.items():
-        text = text.replace(full, half)
-    return text.strip()
+from risk_engine.constants import (
+    OP_PATTERN as _OP_PATTERN,
+    normalize_op_text as _normalize,
+)
 
 
 # ── 子條件解析 ──────────────────────────────────────

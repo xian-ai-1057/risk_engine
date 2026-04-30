@@ -10,7 +10,7 @@ from typing import Any
 from risk_engine import types
 from risk_engine import formula as formula_mod
 from risk_engine import checker as checker_mod
-from utils.simple_convert import UNIT_FORMATTERS
+from risk_engine.constants import UNIT_FORMATTERS
 
 logger = logging.getLogger(__name__)
 

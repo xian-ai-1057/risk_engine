@@ -5,35 +5,35 @@ import tempfile
 
 import pytest
 
-from risk_engine.loader import _to_float, load_config, load_report
+from risk_engine.loader import to_float, load_config, load_report
 
 
-# ── _to_float ─────────────────────────────────────────
+# ── to_float ─────────────────────────────────────────
 
 class TestToFloat:
     def test_none(self):
-        assert _to_float(None) is None
+        assert to_float(None) is None
 
     def test_int(self):
-        assert _to_float(42) == 42.0
+        assert to_float(42) == 42.0
 
     def test_float(self):
-        assert _to_float(3.14) == 3.14
+        assert to_float(3.14) == 3.14
 
     def test_string_number(self):
-        assert _to_float("58.72") == 58.72
+        assert to_float("58.72") == 58.72
 
     def test_empty_string(self):
-        assert _to_float("") is None
+        assert to_float("") is None
 
     def test_whitespace_string(self):
-        assert _to_float("  ") is None
+        assert to_float("  ") is None
 
     def test_invalid_string(self):
-        assert _to_float("abc") is None
+        assert to_float("abc") is None
 
     def test_negative(self):
-        assert _to_float("-10.5") == -10.5
+        assert to_float("-10.5") == -10.5
 
 
 # ── load_report (JSON) ───────────────────────────────
