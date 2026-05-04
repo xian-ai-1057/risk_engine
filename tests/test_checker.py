@@ -272,6 +272,97 @@ class TestEvaluateNode:
         assert result is None
 
 
+# ── Phase 2: 三值短路邏輯 ─────────────────────────────
+
+class TestThreeValuedLogic:
+    """compound 條件的 AND/OR 應採三值短路：
+
+      AND: 任一 false → False；否則任一 None → None；皆 True → True
+      OR : 任一 true  → True ；否則任一 None → None；皆 False → False
+    """
+
+    @pytest.fixture()
+    def report(self):
+        # 必須使用 TI* 前綴才會被 _CODE_PATTERN 識別為代碼
+        return {
+            "TIX001": {
+                "FA_CANME": "x", "單位": "",
+                "Current": 100.0,
+            },
+            "TIZ001": {
+                "FA_CANME": "z", "單位": "",
+                "Current": 5.0,
+            },
+        }
+
+    def _leaf(self, formula, op, threshold):
+        return {
+            "node_type": "condition",
+            "value_formula": formula,
+            "operator": op,
+            "threshold": threshold,
+        }
+
+    def test_and_missing_and_false(self, report):
+        # missing AND false → not_triggered (False 主宰 AND)
+        node = {
+            "node_type": "and",
+            "children": [
+                self._leaf("TIM999", ">", 0.0),
+                self._leaf("TIZ001", ">", 100.0),
+            ],
+        }
+        result, _ = evaluate_node(node, report)
+        assert result is False
+
+    def test_and_missing_and_true(self, report):
+        # missing AND true → missing
+        node = {
+            "node_type": "and",
+            "children": [
+                self._leaf("TIM999", ">", 0.0),
+                self._leaf("TIX001", ">", 0.0),
+            ],
+        }
+        result, _ = evaluate_node(node, report)
+        assert result is None
+
+    def test_or_missing_or_true(self, report):
+        # missing OR true → triggered (True 主宰 OR)
+        node = {
+            "node_type": "or",
+            "children": [
+                self._leaf("TIM999", ">", 0.0),
+                self._leaf("TIX001", ">", 0.0),
+            ],
+        }
+        result, _ = evaluate_node(node, report)
+        assert result is True
+
+    def test_or_missing_or_false(self, report):
+        # missing OR false → missing
+        node = {
+            "node_type": "or",
+            "children": [
+                self._leaf("TIM999", ">", 0.0),
+                self._leaf("TIZ001", ">", 100.0),
+            ],
+        }
+        result, _ = evaluate_node(node, report)
+        assert result is None
+
+    def test_and_missing_and_missing(self, report):
+        node = {
+            "node_type": "and",
+            "children": [
+                self._leaf("TIM998", ">", 0.0),
+                self._leaf("TIM997", ">", 0.0),
+            ],
+        }
+        result, _ = evaluate_node(node, report)
+        assert result is None
+
+
 # ── helper functions ──────────────────────────────────
 
 class TestCalcPeriodChange:

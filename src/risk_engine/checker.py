@@ -106,13 +106,22 @@ def evaluate_node(
         child_results.append(result)
         all_details.extend(details)
 
-    if any(r is None for r in child_results):
-        return None, all_details
-
+    # 三值短路：False 主宰 AND、True 主宰 OR；
+    # 都未短路且有 None 才整體 None。
     if node_type == "and":
-        final = all(child_results)
+        if any(r is False for r in child_results):
+            final = False
+        elif any(r is None for r in child_results):
+            final = None
+        else:
+            final = True
     elif node_type == "or":
-        final = any(child_results)
+        if any(r is True for r in child_results):
+            final = True
+        elif any(r is None for r in child_results):
+            final = None
+        else:
+            final = False
     else:
         final = None
 
