@@ -1,9 +1,10 @@
 """報告產生模組。
 
-負責將規則判斷結果組裝為完整報告 JSON，
+負責將規則判斷結果組裝為完整報告 JSON,
 並提供 LLM 精簡格式轉換。
 """
 import logging
+import re
 from collections import OrderedDict
 from typing import Any
 
@@ -11,6 +12,10 @@ from risk_engine import types
 from risk_engine import formula as formula_mod
 from risk_engine import checker as checker_mod
 from utils.simple_convert import UNIT_FORMATTERS
+
+# 末端 *<常數> 模式（如 "...*100"）：將純比率重新放大為原單位，
+# 應排除「同單位除法 → 無量綱」規則，沿用 operand 單位顯示。
+_TRAILING_CONST_MUL = re.compile(r"\*\s*\d+(?:\.\d+)?\s*$")
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +44,9 @@ def _infer_unit(
     規則：
       - 提取公式中所有基礎代碼的「單位」欄位。
       - 全部代碼單位一致且公式不含除法 → 該單位。
-      - 全部代碼單位一致但含除法且為仟元 → 無量綱。
+      - 全部代碼單位一致且含除法 → 結果為純比率，視為無量綱。
+        例外：公式末端含外層 ``*<常數>``（如 ``...*100``）
+        代表將比率重新放大為原單位（百分點等），仍沿用該單位。
       - 其他 → 空字串（無法推斷）。
 
     Args:
@@ -64,8 +71,10 @@ def _infer_unit(
     if not unit:
         return ""
 
-    # 含除法的仟元公式 → 結果為比率，無量綱
-    if "/" in formula and unit == "仟元":
+    # 同單位除法 → 比率無量綱，但若末端 *<常數> 重新放大則保留單位
+    if "/" in formula and not _TRAILING_CONST_MUL.search(
+        formula,
+    ):
         return ""
 
     return unit

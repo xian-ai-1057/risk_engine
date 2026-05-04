@@ -146,6 +146,130 @@ class TestPipelineRunContract:
         assert rr["sections"]
 
 
+def _find_indicator(rr, section, indicator_name):
+    for ind in rr["sections"].get(section, []):
+        if ind.get("indicator_name") == indicator_name:
+            return ind
+    raise AssertionError(
+        f"找不到指標 {section}/{indicator_name}",
+    )
+
+
+class TestGrossMarginChangeMagnitude:
+    """Phase 1: 毛利率較前期變動 應顯示真實量級 (-17.63%)。
+
+    舊公式 (TIBB018-TIBB018_PRV)/TIBB018_PRV 產生純比率
+    -0.1763，但 operands 兩端均為 % 單位，使
+    format_percent 直接顯示「-0.18%」，造成量級錯誤 100×。
+    修法：在 indicators_config_v3.json 將公式改為
+    ...*100，使輸出為 -17.63%（與口語「衰退 17.63%」
+    一致），threshold/operator 不變。
+    """
+
+    def test_value_magnitude(
+        self, report_data, rules,
+        narrative_template, risk_template,
+    ):
+        pipe = ReportPipeline(
+            report=report_data, rules=rules,
+            narrative_prompt_template=narrative_template,
+            risk_prompt_template=risk_template,
+            industry="7大指標",
+        )
+        rr = pipe.run()["risk_report"]
+        ind = _find_indicator(
+            rr, "獲利能力", "毛利率較前期變動",
+        )
+        # (15.51 - 18.83) / 18.83 * 100 = -17.6314...
+        assert ind["current_value"] == pytest.approx(
+            -17.63, abs=0.01,
+        )
+        assert ind["current_display"] == "-17.63%"
+        tag = ind["taggings"][0]
+        assert tag["tag_id"] == "TIBB018_TAG1"
+        assert tag["status"] == "triggered"
+        assert tag["description"] == "毛利率衰退"
+
+
+class TestCompoundThreeValuedLogic:
+    """Phase 2: AND 中一邊 false、一邊 missing 應為 not_triggered。
+
+    MIX_TAG_G7_20: TIBA063/TIBA041>10.0 AND TIBC014<0.0
+      - TIBA063 不存在 → 子條件 missing
+      - TIBC014=1,436,026, <0.0 → false
+      - 整體：not_triggered（False 主宰 AND）
+    """
+
+    def test_mix_g7_20_status(
+        self, report_data, rules,
+        narrative_template, risk_template,
+    ):
+        pipe = ReportPipeline(
+            report=report_data, rules=rules,
+            narrative_prompt_template=narrative_template,
+            risk_prompt_template=risk_template,
+            industry="7大指標",
+        )
+        rr = pipe.run()["risk_report"]
+        ind = _find_indicator(
+            rr, "獲利能力", "EBITDA 利潤率",
+        )
+        tag = ind["taggings"][0]
+        assert tag["tag_id"] == "MIX_TAG_G7_20"
+        assert tag["status"] == "not_triggered"
+        assert tag["description"] == "不滿足條件"
+
+    def test_summary_counts(
+        self, report_data, rules,
+        narrative_template, risk_template,
+    ):
+        pipe = ReportPipeline(
+            report=report_data, rules=rules,
+            narrative_prompt_template=narrative_template,
+            risk_prompt_template=risk_template,
+            industry="7大指標",
+        )
+        summary = pipe.run()["risk_report"]["summary"]
+        # Phase 1+2 後：MIX_TAG_G7_20 由 missing 轉為 not_triggered
+        assert summary["triggered_count"] == 2
+        assert summary["not_triggered_count"] == 24
+        assert summary["missing_count"] == 0
+        assert summary["total_rules"] == 26
+
+
+class TestRiskReportSnapshot:
+    """Phase 3: 全 report 結構快照比對。
+
+    用 sample_report.json + indicators_config_v3.json 跑出的
+    risk_report 必須與 fixtures/risk_sample_expected.json 完全一致。
+    任何後續修改若改變輸出，必須**顯式**更新 fixture，避免
+    無聲行為漂移（例如本 PR 之前的「億元↔仟元」格式漂移）。
+    """
+
+    _FIXTURE = (
+        Path(__file__).resolve().parent
+        / "fixtures" / "risk_sample_expected.json"
+    )
+
+    def test_full_report_matches_fixture(
+        self, report_data, rules,
+        narrative_template, risk_template,
+    ):
+        pipe = ReportPipeline(
+            report=report_data, rules=rules,
+            narrative_prompt_template=narrative_template,
+            risk_prompt_template=risk_template,
+            customer_id="43228809_123_合併",
+            report_date="20260416",
+            industry="7大指標",
+        )
+        actual = pipe.run()["risk_report"]
+        expected = json.loads(
+            self._FIXTURE.read_text(encoding="utf-8"),
+        )
+        assert actual == expected
+
+
 class TestExeOutputContract:
     """模擬 main.py 包裝 PipelineResult 為 ExeOutput 的合約。"""
 
