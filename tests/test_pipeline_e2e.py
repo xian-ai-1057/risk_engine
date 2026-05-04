@@ -237,6 +237,39 @@ class TestCompoundThreeValuedLogic:
         assert summary["total_rules"] == 26
 
 
+class TestRiskReportSnapshot:
+    """Phase 3: 全 report 結構快照比對。
+
+    用 sample_report.json + indicators_config_v3.json 跑出的
+    risk_report 必須與 fixtures/risk_sample_expected.json 完全一致。
+    任何後續修改若改變輸出，必須**顯式**更新 fixture，避免
+    無聲行為漂移（例如本 PR 之前的「億元↔仟元」格式漂移）。
+    """
+
+    _FIXTURE = (
+        Path(__file__).resolve().parent
+        / "fixtures" / "risk_sample_expected.json"
+    )
+
+    def test_full_report_matches_fixture(
+        self, report_data, rules,
+        narrative_template, risk_template,
+    ):
+        pipe = ReportPipeline(
+            report=report_data, rules=rules,
+            narrative_prompt_template=narrative_template,
+            risk_prompt_template=risk_template,
+            customer_id="43228809_123_合併",
+            report_date="20260416",
+            industry="7大指標",
+        )
+        actual = pipe.run()["risk_report"]
+        expected = json.loads(
+            self._FIXTURE.read_text(encoding="utf-8"),
+        )
+        assert actual == expected
+
+
 class TestExeOutputContract:
     """模擬 main.py 包裝 PipelineResult 為 ExeOutput 的合約。"""
 
