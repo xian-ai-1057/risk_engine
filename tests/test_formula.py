@@ -193,6 +193,27 @@ class TestEvaluateFormula:
         )
         assert result == 47.9
 
+    def test_pct_change_with_explicit_x100(self):
+        """Phase 1: (X-X_PRV)/X_PRV*100 應展開為百分點變動率。
+
+        以 TIBB018 = 15.51（當期）/ 18.83（前期）為例，
+        毛利率較前期衰退 17.63 個百分點。
+        """
+        report = {
+            "TIBB018": {
+                "FA_CANME": "營業毛利/營業收入",
+                "單位": "%",
+                "Current": 15.51,
+                "Period_2": 18.83,
+                "Period_3": 17.38,
+            },
+        }
+        result = evaluate_formula(
+            "(TIBB018-TIBB018_PRV)/TIBB018_PRV*100",
+            report,
+        )
+        assert result == pytest.approx(-17.63, abs=0.01)
+
 
 # ── classify_formula ─────────────────────────────────
 

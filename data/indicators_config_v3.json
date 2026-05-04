@@ -300,9 +300,9 @@
     {
       "section": "獲利能力",
       "indicator_name": "毛利率較前期變動",
-      "indicator_code": "(TIBB018-TIBB018_PRV)/TIBB018_PRV",
+      "indicator_code": "(TIBB018-TIBB018_PRV)/TIBB018_PRV*100",
       "tag_id": "TIBB018_TAG1",
-      "value_formula": "(TIBB018-TIBB018_PRV)/TIBB018_PRV",
+      "value_formula": "(TIBB018-TIBB018_PRV)/TIBB018_PRV*100",
       "compare_type": "absolute",
       "operator": "<",
       "threshold": 0.0,

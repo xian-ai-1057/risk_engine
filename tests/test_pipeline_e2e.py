@@ -146,6 +146,51 @@ class TestPipelineRunContract:
         assert rr["sections"]
 
 
+def _find_indicator(rr, section, indicator_name):
+    for ind in rr["sections"].get(section, []):
+        if ind.get("indicator_name") == indicator_name:
+            return ind
+    raise AssertionError(
+        f"找不到指標 {section}/{indicator_name}",
+    )
+
+
+class TestGrossMarginChangeMagnitude:
+    """Phase 1: 毛利率較前期變動 應顯示真實量級 (-17.63%)。
+
+    舊公式 (TIBB018-TIBB018_PRV)/TIBB018_PRV 產生純比率
+    -0.1763，但 operands 兩端均為 % 單位，使
+    format_percent 直接顯示「-0.18%」，造成量級錯誤 100×。
+    修法：在 indicators_config_v3.json 將公式改為
+    ...*100，使輸出為 -17.63%（與口語「衰退 17.63%」
+    一致），threshold/operator 不變。
+    """
+
+    def test_value_magnitude(
+        self, report_data, rules,
+        narrative_template, risk_template,
+    ):
+        pipe = ReportPipeline(
+            report=report_data, rules=rules,
+            narrative_prompt_template=narrative_template,
+            risk_prompt_template=risk_template,
+            industry="7大指標",
+        )
+        rr = pipe.run()["risk_report"]
+        ind = _find_indicator(
+            rr, "獲利能力", "毛利率較前期變動",
+        )
+        # (15.51 - 18.83) / 18.83 * 100 = -17.6314...
+        assert ind["current_value"] == pytest.approx(
+            -17.63, abs=0.01,
+        )
+        assert ind["current_display"] == "-17.63%"
+        tag = ind["taggings"][0]
+        assert tag["tag_id"] == "TIBB018_TAG1"
+        assert tag["status"] == "triggered"
+        assert tag["description"] == "毛利率衰退"
+
+
 class TestExeOutputContract:
     """模擬 main.py 包裝 PipelineResult 為 ExeOutput 的合約。"""
 
