@@ -270,6 +270,54 @@ class TestParseFilterSheet:
         assert item["expression"] == "TIBB004*TIBA040"
         assert item["key"] == "TIBB004,TIBA040"
 
+    def test_replacement_unit_overrides_unit(self):
+        """替換單位 填值時優先於 單位。
+
+        例：((A+B+C)/D)*D 公式計算結果其實是 仟元（不是 %），
+        以「替換單位」覆寫顯示單位。
+        """
+        df = pd.DataFrame([{
+            "產業別": "7大指標",
+            "段落": "財務結構",
+            "會計科目": "(銀行借款+短期票券+公司債)",
+            "會計科目代碼": "TIBB004",
+            "計算公式": "TIBB004*TIBA040/100",
+            "單位": "%",
+            "替換單位": "仟元",
+        }])
+        result = xi.parse_filter_sheet(df)
+        item = result["7大指標"]["財務結構"][0]
+        assert item["unit"] == "仟元"
+
+    def test_replacement_unit_blank_falls_back_to_unit(self):
+        """替換單位 留白 → 維持原本 單位 行為。"""
+        df = pd.DataFrame([{
+            "產業別": "7大指標",
+            "段落": "財務結構",
+            "會計科目": "權益總額",
+            "會計科目代碼": "TIBA040",
+            "公式": "",
+            "顯示名稱": "",
+            "單位": "億元",
+            "替換單位": "",
+        }])
+        result = xi.parse_filter_sheet(df)
+        item = result["7大指標"]["財務結構"][0]
+        assert item["unit"] == "億元"
+
+    def test_replacement_unit_only(self):
+        """只填 替換單位、不填 單位 → 用 替換單位。"""
+        df = pd.DataFrame([{
+            "產業別": "7大指標",
+            "段落": "財務結構",
+            "會計科目": "權益總額",
+            "會計科目代碼": "TIBA040",
+            "替換單位": "%",
+        }])
+        result = xi.parse_filter_sheet(df)
+        item = result["7大指標"]["財務結構"][0]
+        assert item["unit"] == "%"
+
     def test_filter_dedup_exact_duplicate(self):
         """S1.4：完全重複的 (code, expression) 略過。"""
         df = pd.DataFrame([

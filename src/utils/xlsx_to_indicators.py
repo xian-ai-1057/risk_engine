@@ -6,8 +6,10 @@ Excel 須包含兩個工作表：
                    指標判斷門檻值、風險情境、結果單位、敘事代碼（選用）
   - 敘事指標 (Sheet2)：
       必填欄位：產業別、段落、會計科目、會計科目代碼
-      選填欄位：公式、顯示名稱、單位
+      選填欄位：公式、顯示名稱、單位、替換單位
         (留白時 expression=會計科目代碼、display_name=會計科目、unit="")
+        替換單位優先於單位；兩者皆留白時 unit 退回首個 code
+        的「單位」（在 narrative 模組中處理）。
 
 輸出：
   - indicator.json：{產業: [rule, ...]}（與 convert_indicators.py 相容）
@@ -56,9 +58,12 @@ _FILTER_COLUMNS = [
 # 每個語意欄位允許多個別名，依序取首個非空欄位的值。
 # 「計算公式」是新版命名；「公式」保留向後相容。
 # 「計算公式（中文表示）」屬於人類可讀說明，不參與運算，故排除在外。
+# 「替換單位」優先於「單位」：若公式末端 *operand 改變了量綱
+# （例如 ((A+B+C)/D)*D 結果為 仟元 而非 %），可在「替換單位」
+# 直接覆寫；留白時退回「單位」/ 首個 code 的單位。
 _FILTER_FORMULA_ALIASES = ("計算公式", "公式")
 _FILTER_DISPLAY_NAME_ALIASES = ("顯示名稱",)
-_FILTER_UNIT_ALIASES = ("單位",)
+_FILTER_UNIT_ALIASES = ("替換單位", "單位")
 
 
 def _first_nonempty(
@@ -157,12 +162,13 @@ def parse_filter_sheet(
         expression, unit}, ...]}}。
 
     必填欄位：產業別、段落、會計科目、會計科目代碼。
-    選填欄位：公式、顯示名稱、單位（留白時套 fallback）。
+    選填欄位：公式、顯示名稱、單位、替換單位（留白時套 fallback）。
 
     Fallback 規則（S1.3）：
       - expression 留白 → 會計科目代碼
       - display_name 留白 → 會計科目
-      - unit 留白 → "" （narrative 模組階段再 fallback 至首 code 的單位）
+      - unit：替換單位 優先；其次 單位；皆留白 → ""
+        （narrative 模組階段再 fallback 至首 code 的單位）
       - key 預設 = 會計科目代碼；同段落內衝突時 append _2、_3…
 
     去重（S1.4）：同 (產業, 段落) 內，
