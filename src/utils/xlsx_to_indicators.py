@@ -53,9 +53,24 @@ _FILTER_COLUMNS = [
 ]
 
 # Sheet 2 選填欄位（缺欄時退化為 fallback 行為）
-_FILTER_OPTIONAL_COLUMNS = [
-    "公式", "顯示名稱", "單位",
-]
+# 每個語意欄位允許多個別名，依序取首個非空欄位的值。
+# 「計算公式」是新版命名；「公式」保留向後相容。
+# 「計算公式（中文表示）」屬於人類可讀說明，不參與運算，故排除在外。
+_FILTER_FORMULA_ALIASES = ("計算公式", "公式")
+_FILTER_DISPLAY_NAME_ALIASES = ("顯示名稱",)
+_FILTER_UNIT_ALIASES = ("單位",)
+
+
+def _first_nonempty(
+    row_dict: dict[str, str],
+    aliases: tuple[str, ...],
+) -> str:
+    """依序找第一個有值的別名欄位。"""
+    for key in aliases:
+        val = row_dict.get(key, "")
+        if val:
+            return val
+    return ""
 
 
 def _read_sheet(
@@ -184,9 +199,15 @@ def parse_filter_sheet(
         section = row_dict.get("段落", "")
         name = row_dict.get("會計科目", "")
         code = row_dict.get("會計科目代碼", "")
-        formula_raw = row_dict.get("公式", "")
-        display_name_raw = row_dict.get("顯示名稱", "")
-        unit_raw = row_dict.get("單位", "")
+        formula_raw = _first_nonempty(
+            row_dict, _FILTER_FORMULA_ALIASES,
+        )
+        display_name_raw = _first_nonempty(
+            row_dict, _FILTER_DISPLAY_NAME_ALIASES,
+        )
+        unit_raw = _first_nonempty(
+            row_dict, _FILTER_UNIT_ALIASES,
+        )
 
         if not (industries_raw and section and code):
             continue
