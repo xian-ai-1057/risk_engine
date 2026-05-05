@@ -1,5 +1,11 @@
 """財報風險分析 EXE 入口。
 
+外部輸入只有四類檔案，皆放在 EXE 同層目錄：
+  - 指標 xlsx（預設名 ``指標.xlsx``，可用 ``--xlsx`` 指定）
+  - 4 份財報 HTML（CLI 位置參數）
+  - ``risk_user_prompt.txt``、``narrative_user_prompt.txt`` 兩份 prompt 模板
+  - ``tag_table.csv``（選用，HTML 解析輔助）
+
 支援兩種輸入模式：
   A. CLI 參數（手動執行/除錯用）
   B. --stdin JSON（後端程式呼叫用）
@@ -14,9 +20,10 @@ Usage:
         --industry 批發業 \\
         [-o output.json] [--stdout] [--debug]
 
-    # CLI 模式（含選填 metadata）
+    # CLI 模式（含選填 metadata 與自訂 xlsx）
     risk_analysis.exe f1.html f2.html f3.html f4.html \\
         --industry 批發業 \\
+        [--xlsx 指標.xlsx] \\
         [--customer A00001] [--date 20241231] \\
         [--request-id trace-001] \\
         [-o output.json] [--stdout] [--debug]
@@ -25,6 +32,7 @@ Usage:
     echo '{"html_files":[...], "industry":"批發業"}' \\
         | risk_analysis.exe --stdin [--stdout]
 """
+import glob
 import json
 import logging
 import os
@@ -33,20 +41,56 @@ import uuid
 from typing import Any
 from datetime import datetime
 
-from risk_engine import loader, log_config, types
+from risk_engine import log_config, types
 from risk_engine.loader import build_report_row
 from risk_engine.paths import get_base_dir
 from risk_engine.pipeline import ReportPipeline
 from risk_engine.types import EXE_SCHEMA_VERSION
-from utils import narrative
 from utils.html_to_json import convert_html_files_to_dict
+
+# 注意：``utils.xlsx_to_indicators`` 會觸發 ``import pandas``，僅在實際
+# 需要解析 xlsx 時才載入，避免單元測試（無 pandas 環境）import 失敗。
+# 測試可直接 monkeypatch ``main.xlsx_convert``。
+try:  # pragma: no cover - 依環境而定
+    from utils.xlsx_to_indicators import convert as xlsx_convert
+except ImportError:  # pandas / openpyxl 缺失時延後到呼叫時才報錯
+    xlsx_convert = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
+# 指標 xlsx 預設檔名（依序嘗試）。
+_XLSX_DEFAULT_NAMES = ("指標.xlsx", "indicator.xlsx", "indicators.xlsx")
+
 # ── 路徑解析 ──────────────────────────────────────
 
-def _resolve_paths(base_dir: str) -> dict[str, str]:
-    """自動發現 EXE 同目錄下的設定檔與 prompt 檔。
+def _discover_xlsx(base_dir: str) -> str | None:
+    """在 base_dir 找指標 xlsx；找不到回 None。
+
+    依序：預設檔名 → glob ``*.xlsx`` 唯一一份。多份時不自動猜，
+    交由呼叫端用 ``--xlsx`` 顯式指定。
+    """
+    for name in _XLSX_DEFAULT_NAMES:
+        candidate = os.path.join(base_dir, name)
+        if os.path.isfile(candidate):
+            return candidate
+
+    matches = sorted(
+        glob.glob(os.path.join(base_dir, "*.xlsx")),
+    )
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _resolve_paths(
+    base_dir: str,
+    xlsx_override: str = "",
+) -> dict[str, str]:
+    """自動發現 EXE 同目錄下的指標 xlsx 與 prompt 檔。
+
+    Args:
+        base_dir: EXE 所在目錄。
+        xlsx_override: 由 ``--xlsx`` 指定的路徑；空字串表示用自動探測。
 
     Returns:
         包含所有外部檔案路徑的 dict。
@@ -54,14 +98,20 @@ def _resolve_paths(base_dir: str) -> dict[str, str]:
     Raises:
         FileNotFoundError: 必要檔案不存在。
     """
+    if xlsx_override:
+        xlsx_path = (
+            xlsx_override
+            if os.path.isabs(xlsx_override)
+            else os.path.join(base_dir, xlsx_override)
+        )
+    else:
+        discovered = _discover_xlsx(base_dir)
+        xlsx_path = discovered or os.path.join(
+            base_dir, _XLSX_DEFAULT_NAMES[0],
+        )
 
     paths = {
-        "config": os.path.join(
-            base_dir, "indicators_config.json",
-        ),
-        "narrative_filter": os.path.join(
-            base_dir, "narrative_filter.json",
-        ),
+        "xlsx": xlsx_path,
         "tag_table": os.path.join(
             base_dir, "tag_table.csv",
         ),
@@ -73,8 +123,8 @@ def _resolve_paths(base_dir: str) -> dict[str, str]:
         ),
     }
 
-    # tag_table / narrative_filter 為選用
-    optional = {"tag_table", "narrative_filter"}
+    # tag_table 為選用
+    optional = {"tag_table"}
     missing = [
         k for k, v in paths.items()
         if k not in optional and not os.path.isfile(v)
@@ -87,11 +137,8 @@ def _resolve_paths(base_dir: str) -> dict[str, str]:
             f"缺少必要檔案:\n{detail}"
         )
 
-    # 選用檔案不存在時設為 None
     if not os.path.isfile(paths["tag_table"]):
         paths["tag_table"] = None  # type: ignore[assignment]
-    if not os.path.isfile(paths["narrative_filter"]):
-        paths["narrative_filter"] = None  # type: ignore[assignment]
 
     return paths
 
@@ -108,6 +155,7 @@ def _parse_cli_args(
         "customer": "",
         "date": "",
         "request_id": "",
+        "xlsx": "",
         "output": None,
         "stdout": False,
         "debug": False,
@@ -119,6 +167,7 @@ def _parse_cli_args(
         "--customer": "customer",
         "--date": "date",
         "--request-id": "request_id",
+        "--xlsx": "xlsx",
         "-o": "output",
         "--output": "output",
     }
@@ -181,6 +230,7 @@ def _parse_stdin_args() -> dict[str, Any]:
         "request_id": str(
             data.get("request_id", "")
         ),
+        "xlsx": str(data.get("xlsx", "")),
         "output": data.get("output"),
         "stdout": False,
         "debug": bool(data.get("debug", False)),
@@ -192,7 +242,7 @@ def _validate_args(args: dict[str, Any]) -> None:
     """驗證必要參數。
 
     必填：html_files（4 個）、industry。
-    選填：customer、date、request_id。
+    選填：customer、date、request_id、xlsx。
     """
     errors: list[str] = []
 
@@ -236,49 +286,155 @@ def _read_prompt_template(path: str, label: str) -> str:
         ) from e
 
 
+def _load_rules_and_filter(
+    xlsx_path: str,
+    industry: str,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, list[dict[str, str]]] | None,
+]:
+    """從指標 xlsx 讀出該產業的 rules 與 narrative_filter。
+
+    Raises:
+        FileNotFoundError: xlsx 不存在。
+        types.ConfigError: 產業不在指標 sheet 中，或 xlsx 結構錯誤。
+    """
+    if not os.path.isfile(xlsx_path):
+        raise FileNotFoundError(
+            f"指標 xlsx 不存在: {xlsx_path}"
+        )
+
+    if xlsx_convert is None:
+        raise types.ConfigError(
+            "缺少 pandas/openpyxl，無法讀取指標 xlsx；"
+            "請確認執行環境或 PyInstaller 打包 hiddenimports。"
+        )
+
+    logger.info("讀取指標 xlsx: %s", xlsx_path)
+    try:
+        config_dict, filter_dict = xlsx_convert(xlsx_path)
+    except (ValueError, KeyError) as e:
+        raise types.ConfigError(
+            f"指標 xlsx 解析失敗: {xlsx_path} — {e}"
+        ) from e
+
+    if industry not in config_dict:
+        available = ", ".join(config_dict.keys()) or "(無)"
+        raise types.ConfigError(
+            f"產業 '{industry}' 不在指標 xlsx 中。"
+            f" 可用: {available}"
+        )
+
+    rules = config_dict[industry]
+    narrative_filter = filter_dict.get(industry)
+
+    logger.info(
+        "指標 [%s]: %d 條規則; 敘事段落: %d",
+        industry, len(rules),
+        len(narrative_filter or {}),
+    )
+    return rules, narrative_filter
+
+
+def build_report_from_html(
+    html_files: list[str],
+    tag_table_path: str | None,
+) -> tuple[types.Report, list[str]]:
+    """HTML → Report + period_dates。
+
+    抽出供 batch_test 等驗證腳本共用。
+    """
+    raw_report = convert_html_files_to_dict(
+        html_files,
+        tag_table_path=tag_table_path,
+    )
+    period_dates: list[str] = raw_report.pop(
+        "_period_dates", [],
+    )
+    report: types.Report = {
+        code: build_report_row(data)
+        for code, data in raw_report.items()
+        if code not in _META_KEYS
+    }
+    return report, period_dates
+
+
+def run_pipeline(
+    *,
+    report: types.Report,
+    period_dates: list[str],
+    rules: list[dict[str, Any]],
+    narrative_filter: dict[str, list[dict[str, str]]] | None,
+    narrative_template: str,
+    risk_template: str,
+    industry: str,
+    customer_id: str = "",
+    report_date: str = "",
+) -> types.PipelineResult:
+    """以給定資源執行 ReportPipeline，回傳 PipelineResult。"""
+    pipe = ReportPipeline(
+        report=report,
+        rules=rules,
+        narrative_prompt_template=narrative_template,
+        risk_prompt_template=risk_template,
+        narrative_filter=narrative_filter,
+        customer_id=customer_id,
+        report_date=report_date,
+        industry=industry,
+        period_dates=period_dates or None,
+    )
+    return pipe.run()
+
+
+def assemble_exe_output(
+    *,
+    pipeline_result: types.PipelineResult,
+    request_id: str,
+    industry: str,
+    customer: str = "",
+    date: str = "",
+) -> types.ExeOutput:
+    """把 PipelineResult 包裝成最終 EXE 輸出 dict。"""
+    output: types.ExeOutput = {
+        "schema_version": EXE_SCHEMA_VERSION,
+        "request_id": request_id,
+        "industry": industry,
+        "narrative_prompt": pipeline_result["narrative_prompt"],
+        "risk_prompt": pipeline_result["risk_prompt"],
+        "grouped_report": pipeline_result["grouped_report"],
+        "risk_report": pipeline_result["risk_report"],
+    }
+    if customer:
+        output["customer_id"] = customer
+    if date:
+        output["report_date"] = date
+    return output
+
+
 def _run(
     args: dict[str, Any],
     request_id: str,
 ) -> types.ExeOutput:
     """執行主要處理流程。"""
     base_dir = get_base_dir()
-    paths = _resolve_paths(base_dir)
+    paths = _resolve_paths(base_dir, args.get("xlsx", ""))
 
-    # 1. HTML → dict（純記憶體）
+    # 1. HTML → Report（純記憶體）
     logger.info("開始轉換 HTML 財報")
-    raw_report = convert_html_files_to_dict(
-        args["html_files"],
-        tag_table_path=paths["tag_table"],
+    report, period_dates = build_report_from_html(
+        args["html_files"], paths["tag_table"],
+    )
+    logger.info(
+        "財報載入完成，代碼數: %d；期間日期: %s",
+        len(report), period_dates,
     )
 
-    # 1b. 提取期間日期 metadata
-    period_dates: list[str] = raw_report.pop(
-        "_period_dates", [],
-    )
-    logger.info("期間日期: %s", period_dates)
-
-    # 2. 正規化為 Report
-    report: types.Report = {
-        code: build_report_row(data)
-        for code, data in raw_report.items()
-        if code not in _META_KEYS
-    }
-    logger.info("財報載入完成，代碼數: %d", len(report))
-
-    # 3. 載入規則
-    rules = loader.load_config(
-        paths["config"], args["industry"],
+    # 2. xlsx → rules + narrative_filter
+    rules, narrative_filter = _load_rules_and_filter(
+        paths["xlsx"], args["industry"],
     )
 
-    # 3b. 載入敘事 filter（缺檔或產業不符時 narrative
-    # 分支會回空，但 risk 分支仍可獨立完成）
-    narrative_filter = None
-    if paths["narrative_filter"]:
-        narrative_filter = narrative.load_narrative_filter(
-            paths["narrative_filter"], args["industry"],
-        )
-
-    # 4. 讀取 user prompt 模板
+    # 3. 讀取 user prompt 模板
     narrative_tmpl = _read_prompt_template(
         paths["narrative_user_prompt"], "敘事",
     )
@@ -286,40 +442,27 @@ def _run(
         paths["risk_user_prompt"], "風險",
     )
 
-    # 5. 執行 Pipeline（period_dates 由 pipeline 統一處理）
-    pipe = ReportPipeline(
+    # 4. 執行 Pipeline
+    result = run_pipeline(
         report=report,
+        period_dates=period_dates,
         rules=rules,
-        narrative_prompt_template=narrative_tmpl,
-        risk_prompt_template=risk_tmpl,
         narrative_filter=narrative_filter,
+        narrative_template=narrative_tmpl,
+        risk_template=risk_tmpl,
+        industry=args["industry"],
         customer_id=args.get("customer", ""),
         report_date=args.get("date", ""),
-        industry=args["industry"],
-        period_dates=period_dates or None,
     )
-    result = pipe.run()
 
-    # 6. 組裝最終輸出
-    output: types.ExeOutput = {
-        "schema_version": EXE_SCHEMA_VERSION,
-        "request_id": request_id,
-        "industry": args["industry"],
-        "narrative_prompt": result["narrative_prompt"],
-        "risk_prompt": result["risk_prompt"],
-        "grouped_report": result["grouped_report"],
-        "risk_report": result["risk_report"],
-    }
-
-    # 選填 metadata：有值才寫入
-    customer = args.get("customer", "")
-    date = args.get("date", "")
-    if customer:
-        output["customer_id"] = customer
-    if date:
-        output["report_date"] = date
-
-    return output
+    # 5. 組裝最終輸出
+    return assemble_exe_output(
+        pipeline_result=result,
+        request_id=request_id,
+        industry=args["industry"],
+        customer=args.get("customer", ""),
+        date=args.get("date", ""),
+    )
 
 
 def _default_output_path(request_id: str) -> str:
@@ -387,6 +530,7 @@ def _usage() -> None:
         "  risk_analysis.exe "
         "<html_1> <html_2> <html_3> <html_4>\n"
         "    --industry <str>\n"
+        "    [--xlsx 指標.xlsx]\n"
         "    [--customer <str>] [--date <str>]\n"
         "    [--request-id <str>]\n"
         "    [-o output.json] [--stdout] [--debug]\n"

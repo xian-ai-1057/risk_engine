@@ -22,7 +22,9 @@ risk_engine/                          # 專案根目錄
 ├── conftest.py                       # 將 src/ 加入 sys.path 供 pytest 使用
 ├── README.md
 ├── scripts/
-│   └── risk_checker.py               # CLI 主入口
+│   ├── main.py                       # EXE 入口（xlsx + html + 2 prompts）
+│   ├── batch_test.py                 # EXE 打包前批次驗證腳本
+│   └── risk_checker.py               # legacy CLI（JSON-driven，僅 debug 用）
 ├── src/
 │   ├── risk_engine/                  # 核心套件
 │   │   ├── __init__.py               # 公開 API 匯出
@@ -61,12 +63,17 @@ risk_engine/                          # 專案根目錄
 
 ### 輸入
 
+EXE 流程（``scripts/main.py``）只接受四類檔案，皆放在 EXE 同層：
+
 | 項目 | 來源 | 必填欄位 / 約束 |
 |------|------|-----------------|
-| 財報 | CSV / JSON | CSV 必含 `FA_RFNBR`；JSON 以代碼為 key。每筆需含 `FA_CANME`、`單位`、`Current`，可選 `Period_2`、`Period_3`。空值與非數值字串會轉為 `None`。 |
-| 指標設定 | JSON | 以產業為 key；每條規則需含 `section`、`indicator_name`、`indicator_code`、`tag_id`、`value_formula`、`compare_type`、`risk_description`。`compare_type` ∈ `{absolute, period_change_pct, period_change_abs, compound}`。 |
-| 敘事過濾 | JSON（選用） | 以產業為 key、段落為次 key，每段落列出 `[{code, name}, ...]`。產出 narrative 時必填；列出的會計科目即為敘事 LLM 看到的內容。 |
-| Prompt 模板 | TXT | 敘事模板需含 `{{JSON_DATA}}`；風險模板需含 `{{risk_results_1}}`–`{{risk_results_5}}`，可選含 `{{narrative_1}}`–`{{narrative_5}}`。 |
+| 財報 | 4 份 HTML（Big5） | 由 ``utils.html_to_json`` 解析；附帶 ``_period_dates`` metadata。 |
+| 指標 + 敘事 | 一份 xlsx | 必含 `指標` / `敘事指標` 兩個 sheet（找不到時 fallback 為 `Sheet1` / `Sheet2`），由 ``utils.xlsx_to_indicators`` 一次轉成 rules + narrative_filter。預設檔名 `指標.xlsx`，可用 `--xlsx` 指定。 |
+| Prompt 模板 | `risk_user_prompt.txt`、`narrative_user_prompt.txt` | 敘事模板需含 `{{JSON_DATA}}`；風險模板需含 `{{risk_results_1}}`–`{{risk_results_5}}`，可選含 `{{narrative_1}}`–`{{narrative_5}}`。 |
+| Tag 對照 | `tag_table.csv`（選用） | HTML 解析輔助；缺檔自動退化為 None。 |
+
+底層 Python API / legacy CLI（``scripts/risk_checker.py``）仍可吃 CSV / JSON 財報與
+分離的 indicator JSON / narrative_filter JSON，僅供 debug；正式 EXE 流程不再支援。
 
 ### 輸出
 
@@ -93,7 +100,8 @@ risk_engine/                          # 專案根目錄
 
 - `types.ReportLoadError`：財報載入失敗（檔案不存在、CSV 缺 `FA_RFNBR`、JSON 解析失敗等）。
 - `types.ConfigError`：指標設定載入失敗（檔案不存在、JSON 解析失敗、產業不存在）。
-- 兩者於 `risk_checker.main` 中以 `sys.exit(1)` 結束；其他未預期錯誤以 `logger.exception` 記錄後同樣 `exit 1`。
+- EXE 入口 (`scripts/main.py`) 會把這兩類例外與 `FileNotFoundError`、其他例外分別對應到 `CONFIG_ERROR` / `MISSING_FILE` / `PROCESSING_ERROR`（見 `types.ERROR_CODES`），exit code 分別為 2 / 2 / 3，`--stdout` 模式下印出 `ExeError` JSON。
+- Legacy `risk_checker.main` 把所有例外統一以 `sys.exit(1)` 結束。
 
 ### Logging
 
@@ -105,41 +113,48 @@ risk_engine/                          # 專案根目錄
 
 ## 快速開始
 
-### 1. CLI 直接執行
+### 1. EXE 流程（生產用）
 
 ```bash
-python scripts/risk_checker.py \
-    --report 財報.csv \
-    --config data/indicator.json \
+# 以 dev 環境執行（等同 EXE 行為）
+python scripts/main.py f1.html f2.html f3.html f4.html \
     --industry 7大指標 \
-    --customer A00001 \
-    --date 20241231 \
-    -o result.json \
-    [--compact] \
-    [--narrative] \
-    [--narrative-filter data/narrative_filter.json] \
-    [--log risk_checker.log] \
-    [--debug]
+    [--xlsx 指標.xlsx] \
+    [--customer A00001] [--date 20241231] \
+    [--request-id trace-001] \
+    [-o output.json] [--stdout] [--debug]
+
+# stdin JSON 模式（後端整合）
+echo '{"html_files":["f1.html","f2.html","f3.html","f4.html"],
+       "industry":"7大指標"}' \
+    | python scripts/main.py --stdin --stdout
 ```
 
 | 旗標 | 說明 |
 |------|------|
-| `--report` | 財報檔案路徑（`.csv` / `.json`，依副檔名自動判斷）。 |
-| `--config` | 指標設定 JSON 路徑（risk 路徑專用）。 |
-| `--industry` | 產業名稱（必須同時存在於 `--config` 與 `--narrative-filter`）。 |
-| `--customer` | 客戶代碼。 |
-| `--date` | 報表日期。 |
-| `-o` | 輸出 JSON 路徑（預設 `result.json`）。 |
-| `--compact` | 額外輸出 LLM 精簡格式（檔名加 `_compact` 後綴）。 |
-| `--narrative` | 產出財報敘事段落，**必須**搭配 `--narrative-filter`。 |
-| `--narrative-filter` | narrative_filter JSON 路徑；列出每段落要敘事的會計科目代碼。 |
-| `--log` | 自訂 log 檔；未指定時寫入 `log/<timestamp>.log`。 |
-| `--debug` | 開啟 DEBUG 級別 log。 |
+| 4 個位置參數 | 4 份財報 HTML 路徑（Big5 編碼），順序需符合 `html_to_json` 的工作表配置。 |
+| `--industry` | 產業名稱，必須存在於指標 xlsx 的 `指標` sheet `產業別` 欄。 |
+| `--xlsx` | 指標 xlsx 路徑；省略時自動探測（預設 `指標.xlsx` / `indicator.xlsx` / `indicators.xlsx`，或 EXE 同層唯一一份 `*.xlsx`）。 |
+| `--customer` / `--date` | 選填 metadata；填寫後會寫入輸出 `customer_id` / `report_date`。 |
+| `--request-id` | 上游 trace ID；未指定時自動產生 8 字 hex。 |
+| `-o` | 輸出 JSON 路徑（預設 `<base_dir>/output/result_<request_id>_<ts>.json`）。 |
+| `--stdout` | 把輸出 JSON / 錯誤 JSON 印到 stdout（log 仍走檔案，不混入）。 |
+| `--debug` | 切 DEBUG 級別 log。 |
 
-> Risk 與 Narrative 是兩條獨立 pipeline：risk 由 `--config`（indicator.json）驅動；
-> narrative 由 `--narrative-filter`（narrative_filter.json）驅動。兩者僅共用財報。
+EXE 同層需備齊：xlsx + `risk_user_prompt.txt` + `narrative_user_prompt.txt`，
+（選用）`tag_table.csv`。輸出結構為 `ExeOutput`（含 `schema_version`、
+`narrative_prompt`、`risk_prompt`、`grouped_report`、`risk_report`）。
 
-### 1.1 從 Excel 產出 indicator.json + narrative_filter.json
+打包前可先用批次驗證腳本掃過既有測試案例：
+
+```bash
+python scripts/batch_test.py    # 讀 data/report/新測試案例_json/*.json
+```
+
+### 1.1 從 Excel 單獨產出 indicator.json + narrative_filter.json（debug 用）
+
+EXE 流程裡 xlsx 是直接在記憶體中轉成 rules / filter，不會落地。若要單獨檢視
+轉換結果（比對舊 JSON、debug），可用：
 
 ```bash
 python -m utils.xlsx_to_indicators 指標.xlsx \
@@ -152,6 +167,12 @@ Excel 須包含兩個 sheet：
 - `敘事指標`：`產業別` / `段落` / `會計科目` / `會計科目代碼`，列出每段落要敘事的會計科目。
 
 找不到預設 sheet 名時自動 fallback 為 `Sheet1` / `Sheet2`，亦可用 `--indicator-sheet` / `--filter-sheet` 指定。
+
+### 1.2 Legacy CLI（debug-only）
+
+`scripts/risk_checker.py` 走舊版 JSON-driven 流程（`--config indicators_config.json`
++ `--narrative-filter narrative_filter.json`），保留供開發者快速回歸；EXE 打包
+**不**使用此入口。詳細旗標見該檔 docstring。
 
 ### 2. Python API
 
