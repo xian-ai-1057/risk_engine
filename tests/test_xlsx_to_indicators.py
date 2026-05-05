@@ -254,6 +254,22 @@ class TestParseFilterSheet:
         assert items[1]["expression"] == "TIBB011-TIBB011_PRV"
         assert items[2]["expression"] == "TIBB011*2"
 
+    def test_filter_with_calc_formula_alias(self):
+        """新版欄位名 計算公式 也視為公式來源。"""
+        df = pd.DataFrame([{
+            "產業別": "7大指標",
+            "段落": "償債能力",
+            "會計科目": "(銀行借款+短期票券+公司債)",
+            "會計科目代碼": "TIBB004,TIBA040",
+            "計算公式（中文表示）":
+                "((銀行借款+短期票券+公司債)/權益總額)*權益總額",
+            "計算公式": "TIBB004*TIBA040",
+        }])
+        result = xi.parse_filter_sheet(df)
+        item = result["7大指標"]["償債能力"][0]
+        assert item["expression"] == "TIBB004*TIBA040"
+        assert item["key"] == "TIBB004,TIBA040"
+
     def test_filter_dedup_exact_duplicate(self):
         """S1.4：完全重複的 (code, expression) 略過。"""
         df = pd.DataFrame([
