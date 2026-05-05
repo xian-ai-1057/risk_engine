@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 # 預設 sheet 名稱與 fallback
 _INDICATOR_SHEET_DEFAULT = "指標"
-_FILTER_SHEET_DEFAULT = "敘事指標"
+_FILTER_SHEET_DEFAULT = "敘事"
 _INDICATOR_SHEET_FALLBACK = "Sheet1"
 _FILTER_SHEET_FALLBACK = "Sheet2"
 
