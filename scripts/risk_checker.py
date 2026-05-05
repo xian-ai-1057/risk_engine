@@ -1,4 +1,13 @@
-"""財報風險判斷程式。
+"""財報風險判斷程式（legacy / debug-only）。
+
+⚠️ 此 CLI 走的是舊版 JSON-driven 流程（``--config indicators_config.json``
++ ``--narrative-filter narrative_filter.json``），保留供：
+  - 開發者針對既有 ``indicators_config_v3.json`` 做快速回歸/比對
+  - 單獨 debug ``report.generate_report`` 而不經過 ``ReportPipeline``
+
+EXE 打包流程**不**使用此入口。生產用流程走 ``scripts/main.py``，
+指標來源統一由 xlsx 提供（見 ``utils/xlsx_to_indicators``），輸出的
+``ExeOutput`` 結構與這裡的 ``FullReport`` 也不同。新增功能請改 main.py。
 
 讀取財報 CSV/JSON + 指標設定檔 JSON →
 輸出風險判斷結果 JSON。

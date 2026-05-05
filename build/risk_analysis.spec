@@ -4,10 +4,9 @@
 設計要點：
   * 入口：scripts/main.py
   * 採 onefile 模式（單一 exe），避免上游部署需處理多檔
-  * 不打包業務資料（indicators_config.json / 兩個 prompt /
-    tag_table.csv）— 設計上要求這些檔放在 exe 同層，方便不重新
-    打包就更新規則或 prompt
-  * 只用到標準函式庫 + 自家原始碼，不需 hiddenimports
+  * 不打包業務資料（指標 xlsx / 兩個 prompt / tag_table.csv）—
+    設計上要求這些檔放在 exe 同層，方便不重新打包就更新規則或 prompt
+  * 需要 pandas + openpyxl 來讀指標 xlsx（utils.xlsx_to_indicators）
 
 打包指令（在 repo root 執行）：
   pyinstaller build/risk_analysis.spec
@@ -36,7 +35,6 @@ a = Analysis(
     pathex=[_SRC, _SCRIPTS],
     binaries=[],
     datas=[],
-    # 動態 import 的子模組需要明列；目前都是靜態 import，留空即可
     hiddenimports=[
         "risk_engine",
         "risk_engine.checker",
@@ -50,21 +48,25 @@ a = Analysis(
         "risk_engine.threshold",
         "risk_engine.types",
         "utils.combine_prompt",
+        "utils.convert_indicators",
         "utils.html_to_json",
         "utils.narrative",
         "utils.simple_convert",
+        "utils.xlsx_to_indicators",
+        # xlsx → DataFrame 需要 pandas + openpyxl 引擎
+        "pandas",
+        "openpyxl",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
         # 主流程不用，避免被巨大依賴拖累 exe 體積
-        "pandas",
-        "numpy",
+        "numpy.distutils",
         "docx",
-        "openpyxl",
         "matplotlib",
         "scipy",
+        "tkinter",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

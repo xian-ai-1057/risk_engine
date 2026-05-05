@@ -103,6 +103,17 @@ class TestCliMissingArgs:
 
 # ── 3. MISSING_FILE：HTML 檔不存在 ───────────────
 
+def _stub_xlsx(tmp_path: Path) -> Path:
+    """建立一個空的 dummy xlsx，僅用於通過 `_resolve_paths` 的存在性檢查。
+
+    內容無關緊要 —— 我們會 monkeypatch ``main.xlsx_convert``，
+    所以實際上不會真的呼叫 pandas 讀取它。
+    """
+    p = tmp_path / "指標.xlsx"
+    p.write_bytes(b"dummy")
+    return p
+
+
 class TestMissingFile:
     def test_html_not_found_returns_missing_file(
         self,
@@ -112,10 +123,7 @@ class TestMissingFile:
         capture_stdout,
     ):
         # 在 tmp_path 建立必要的同層設定檔，避免提前因設定缺失而失敗
-        (tmp_path / "indicators_config.json").write_text(
-            json.dumps({"批發業": []}),
-            encoding="utf-8",
-        )
+        _stub_xlsx(tmp_path)
         (tmp_path / "risk_user_prompt.txt").write_text(
             "RISK", encoding="utf-8",
         )
@@ -146,6 +154,36 @@ class TestMissingFile:
         payload = capture_stdout()
         assert payload["error_code"] == "MISSING_FILE"
 
+    def test_missing_xlsx_returns_missing_file(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+        make_argv,
+        capture_stdout,
+    ):
+        # 故意不建立 xlsx；prompt 都備齊
+        (tmp_path / "risk_user_prompt.txt").write_text(
+            "RISK", encoding="utf-8",
+        )
+        (tmp_path / "narrative_user_prompt.txt").write_text(
+            "NARRATIVE", encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "main.get_base_dir", lambda: str(tmp_path),
+        )
+
+        make_argv(
+            "a.html", "b.html", "c.html", "d.html",
+            "--industry", "批發業", "--stdout",
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            main_mod.main()
+
+        assert exc.value.code == 2
+        payload = capture_stdout()
+        assert payload["error_code"] == "MISSING_FILE"
+
 
 # ── 4. CONFIG_ERROR：industry 不在設定檔 ─────────
 
@@ -157,10 +195,7 @@ class TestConfigError:
         make_argv,
         capture_stdout,
     ):
-        (tmp_path / "indicators_config.json").write_text(
-            json.dumps({"批發業": []}),
-            encoding="utf-8",
-        )
+        _stub_xlsx(tmp_path)
         (tmp_path / "risk_user_prompt.txt").write_text(
             "RISK", encoding="utf-8",
         )
@@ -175,11 +210,15 @@ class TestConfigError:
                 "_period_dates": [],
             },
         )
+        # mock xlsx_convert 直接回固定 config（避免依賴 pandas/openpyxl）
+        monkeypatch.setattr(
+            "main.xlsx_convert",
+            lambda path: ({"批發業": []}, {"批發業": {}}),
+        )
         monkeypatch.setattr(
             "main.get_base_dir", lambda: str(tmp_path),
         )
 
-        # 4 個 dummy HTML 路徑（mock 後不會真的開檔）
         make_argv(
             "a.html", "b.html", "c.html", "d.html",
             "--industry", "不存在的產業",

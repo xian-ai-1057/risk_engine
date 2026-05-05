@@ -1,8 +1,12 @@
 """batch_test — 批次執行指定資料夾內所有報告 JSON，產出風險與敘事 Prompt。
 
-與 EXE 入口（``scripts/main.py``）共用「xlsx 為指標唯一來源」的流程，
-讓你能在不打包 EXE 的情況下，先針對既有的 ``data/report/新測試案例_json``
-逐一跑完整 pipeline 驗證功能。
+與 EXE 入口（``scripts/main.py``）共用「xlsx 為指標唯一來源」的流程：
+  - 同樣呼叫 ``utils.xlsx_to_indicators.convert`` 取得 rules + narrative_filter
+  - 同樣經過 ``ReportPipeline`` 產出 prompt
+  - 輸出格式與 EXE 相同（``ExeOutput``，含 ``schema_version``）
+
+唯一差別：報告來源是已經 cache 好的 ``html_to_json`` JSON（避免每次重跑 HTML
+解析），方便針對既有測試案例集合做迴歸驗證。
 
 執行方式：
     python scripts/batch_test.py
@@ -18,14 +22,15 @@ from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
 _SRC = _REPO / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+_SCRIPTS = _REPO / "scripts"
+for _p in (_SRC, _SCRIPTS):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
-from risk_engine import ReportPipeline
 from risk_engine.loader import build_report_row
-from risk_engine.types import ExeOutput
-from utils import narrative as narrative_mod
-from utils.xlsx_to_indicators import convert as xlsx_convert
+from risk_engine.types import EXE_SCHEMA_VERSION, ExeOutput, Report
+
+import main as exe_main  # 共用 EXE 入口的 helper
 
 # ── 批次參數（可自行修改）─────────────────────────
 REPORT_DIR = _REPO / "data" / "report" / "新測試案例_json"
@@ -41,6 +46,8 @@ AUDIT_DIR: Path | None = _REPO / "output" / "audit"
 # ─────────────────────────────────────────────────
 
 TIME_STAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+# 與 main._META_KEYS 的差異：批次 JSON 由先前 html_to_json 產出時保留了
+# `_period_dates`，這裡需要先 pop 出來再過濾掉。
 _META_KEYS = {"skipped", "_period_dates"}
 
 
@@ -61,6 +68,20 @@ def _write_audit_json(path: Path, data: object) -> None:
         print(f"  (warn) audit 寫入失敗 {path}: {e}")
 
 
+def _load_report_json(path: Path) -> tuple[Report, list[str]]:
+    """讀取已 cache 的 report JSON，回 (Report, period_dates)。"""
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+
+    period_dates: list[str] = raw.pop("_period_dates", [])
+    report: Report = {
+        code: build_report_row(data)
+        for code, data in raw.items()
+        if code not in _META_KEYS and isinstance(data, dict)
+    }
+    return report, period_dates
+
+
 def run_single(
     report_path: Path,
     customer_id: str,
@@ -70,38 +91,29 @@ def run_single(
     risk_template: str,
 ) -> None:
     """對單一報告 JSON 執行完整 pipeline，並將結果寫入輸出目錄。"""
-    with open(report_path, encoding="utf-8") as f:
-        raw = json.load(f)
+    report, period_dates = _load_report_json(report_path)
 
-    period_dates: list[str] = raw.pop("_period_dates", [])
-    report = {
-        code: build_report_row(data)
-        for code, data in raw.items()
-        if code not in _META_KEYS
-    }
-
-    result = ReportPipeline(
+    pipeline_result = exe_main.run_pipeline(
         report=report,
+        period_dates=period_dates,
         rules=rules,
         narrative_filter=narrative_filter,
-        narrative_prompt_template=narr_template,
-        risk_prompt_template=risk_template,
+        narrative_template=narr_template,
+        risk_template=risk_template,
+        industry=INDUSTRY,
         customer_id=customer_id,
         report_date=REPORT_DATE,
-        industry=INDUSTRY,
-        period_dates=period_dates or None,
-    ).run()
+    )
 
-    output: ExeOutput = {
-        "request_id": customer_id,
-        "customer_id": customer_id,
-        "report_date": REPORT_DATE,
-        "industry": INDUSTRY,
-        "narrative_prompt": result["narrative_prompt"],
-        "risk_prompt": result["risk_prompt"],
-        "grouped_report": result["grouped_report"],
-        "risk_report": result["risk_report"],
-    }
+    output = exe_main.assemble_exe_output(
+        pipeline_result=pipeline_result,
+        request_id=customer_id,
+        industry=INDUSTRY,
+        customer=customer_id,
+        date=REPORT_DATE,
+    )
+    assert output["schema_version"] == EXE_SCHEMA_VERSION
+
     _write_output(
         OUTPUT_DIR / f"result_{customer_id}_{TIME_STAMP}.json",
         output,
@@ -121,9 +133,14 @@ def main() -> None:
         sys.exit(1)
 
     print(f"讀取指標 xlsx: {XLSX_PATH}")
-    config_dict, filter_dict = xlsx_convert(str(XLSX_PATH))
+    rules, narrative_filter = exe_main._load_rules_and_filter(
+        str(XLSX_PATH), INDUSTRY,
+    )
 
     if AUDIT_DIR is not None:
+        # 重新讀一次以同時 dump 全產業（audit 用），不影響上面已挑好的單產業結果
+        from utils.xlsx_to_indicators import convert as xlsx_convert
+        config_dict, filter_dict = xlsx_convert(str(XLSX_PATH))
         _write_audit_json(
             AUDIT_DIR / "indicators_config.json", config_dict,
         )
@@ -131,27 +148,13 @@ def main() -> None:
             AUDIT_DIR / "narrative_filter.json", filter_dict,
         )
 
-    if INDUSTRY not in config_dict:
-        available = ", ".join(config_dict.keys())
-        print(
-            f"產業 '{INDUSTRY}' 不存在於 xlsx 指標工作表。"
-            f" 可用: {available}"
-        )
-        sys.exit(1)
-    rules = config_dict[INDUSTRY]
     print(f"  指標 [{INDUSTRY}]: {len(rules)} 條規則")
-
-    narrative_filter = filter_dict.get(INDUSTRY)
     if narrative_filter is None:
-        available = ", ".join(filter_dict.keys()) or "(無)"
         print(
             f"  (warn) xlsx 敘事工作表沒有產業 '{INDUSTRY}'，"
-            f"敘事 prompt 將為空。可用: {available}"
+            f"敘事 prompt 將為空。"
         )
     else:
-        narrative_mod.validate_filter_sections(
-            narrative_filter, INDUSTRY,
-        )
         total_items = sum(
             len(v) for v in narrative_filter.values()
         )
