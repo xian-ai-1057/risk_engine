@@ -38,6 +38,7 @@ from risk_engine.loader import build_report_row
 from risk_engine.paths import get_base_dir
 from risk_engine.pipeline import ReportPipeline
 from risk_engine.types import EXE_SCHEMA_VERSION
+from utils import narrative
 from utils.html_to_json import convert_html_files_to_dict
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,9 @@ def _resolve_paths(base_dir: str) -> dict[str, str]:
         "config": os.path.join(
             base_dir, "indicators_config.json",
         ),
+        "narrative_filter": os.path.join(
+            base_dir, "narrative_filter.json",
+        ),
         "tag_table": os.path.join(
             base_dir, "tag_table.csv",
         ),
@@ -69,8 +73,8 @@ def _resolve_paths(base_dir: str) -> dict[str, str]:
         ),
     }
 
-    # tag_table 為選用
-    optional = {"tag_table"}
+    # tag_table / narrative_filter 為選用
+    optional = {"tag_table", "narrative_filter"}
     missing = [
         k for k, v in paths.items()
         if k not in optional and not os.path.isfile(v)
@@ -83,9 +87,11 @@ def _resolve_paths(base_dir: str) -> dict[str, str]:
             f"缺少必要檔案:\n{detail}"
         )
 
-    # tag_table 不存在時設為 None
+    # 選用檔案不存在時設為 None
     if not os.path.isfile(paths["tag_table"]):
         paths["tag_table"] = None  # type: ignore[assignment]
+    if not os.path.isfile(paths["narrative_filter"]):
+        paths["narrative_filter"] = None  # type: ignore[assignment]
 
     return paths
 
@@ -264,6 +270,14 @@ def _run(
         paths["config"], args["industry"],
     )
 
+    # 3b. 載入敘事 filter（缺檔或產業不符時 narrative
+    # 分支會回空，但 risk 分支仍可獨立完成）
+    narrative_filter = None
+    if paths["narrative_filter"]:
+        narrative_filter = narrative.load_narrative_filter(
+            paths["narrative_filter"], args["industry"],
+        )
+
     # 4. 讀取 user prompt 模板
     narrative_tmpl = _read_prompt_template(
         paths["narrative_user_prompt"], "敘事",
@@ -278,6 +292,7 @@ def _run(
         rules=rules,
         narrative_prompt_template=narrative_tmpl,
         risk_prompt_template=risk_tmpl,
+        narrative_filter=narrative_filter,
         customer_id=args.get("customer", ""),
         report_date=args.get("date", ""),
         industry=args["industry"],
