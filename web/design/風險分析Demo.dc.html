@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Noto Sans TC',system-ui,-apple-system,sans-serif;background:#eceef1;color:#101828;-webkit-font-smoothing:antialiased}
+  ::selection{background:#c7d2fe}
+</style>
+</helmet>
+
+<section style="padding:40px 40px 80px;display:flex;justify-content:center">
+    <div style="width:1200px;max-width:100%">
+      <div style="background:#f7f8fa;border:1px solid #e4e7ec;border-radius:18px;overflow:hidden;box-shadow:0 20px 44px -28px rgba(16,24,40,.28)">
+        <!-- app header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 26px;background:#fff;border-bottom:1px solid #eaecf0">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;border-radius:9px;background:#4f46e5;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px">風</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;letter-spacing:.01em">風險分析引擎</div>
+              <div style="font-size:12px;color:#98a2b3">7大指標 · 財報風險判定</div>
+            </div>
+          </div>
+          <sc-if value="{{ aDone }}" hint-placeholder-val="">
+            <div style="display:flex;align-items:center;gap:16px">
+              <div style="text-align:right;line-height:1.35">
+                <div style="font-size:12px;color:#98a2b3">客戶 {{ customerId }} · {{ reportDateDisp }}</div>
+                <div style="font-size:12px;color:#667085">request {{ requestId }}</div>
+              </div>
+              <button onClick="{{ toggleJsonA }}" style="cursor:pointer;border:none;background:#4f46e5;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:9px;font-family:inherit;white-space:nowrap">匯出 JSON</button>
+              <button onClick="{{ resetA }}" style="cursor:pointer;border:1px solid #d0d5dd;background:#fff;color:#475467;font-size:13px;font-weight:500;padding:9px 14px;border-radius:9px;font-family:inherit;white-space:nowrap">重新開始</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- UPLOAD -->
+        <sc-if value="{{ aUpload }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:56px 26px 64px;display:flex;justify-content:center">
+            <div style="width:560px;text-align:center">
+              <div style="width:60px;height:60px;border-radius:15px;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+              </div>
+              <div style="font-size:20px;font-weight:700;margin-bottom:8px">上傳財務報表 HTML</div>
+              <div style="font-size:14px;color:#667085;line-height:1.7;margin-bottom:26px">依序上傳 4 份報表：①財務概況 ②財務比率 ③現金流量 ④淨值調節</div>
+
+              <div style="border:1.5px dashed #cbd2dc;border-radius:14px;background:#fff;padding:26px 22px">
+                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px">
+                  <label style="cursor:pointer;background:#4f46e5;color:#fff;font-size:13px;font-weight:700;padding:10px 18px;border-radius:9px;display:inline-flex;align-items:center;gap:7px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    選擇 HTML 檔
+                    <input type="file" multiple accept=".html,.htm" onChange="{{ pickA }}" style="display:none" />
+                  </label>
+                  <button onClick="{{ sampleA }}" style="cursor:pointer;background:#fff;border:1px solid #d0d5dd;color:#475467;font-size:13px;font-weight:500;padding:10px 16px;border-radius:9px;font-family:inherit">載入範例財報</button>
+                </div>
+                <sc-if value="{{ aHasFiles }}" hint-placeholder-val="">
+                  <div style="display:flex;flex-direction:column;gap:7px;text-align:left">
+                    <sc-for list="{{ aFiles }}" as="f" hint-placeholder-count="4">
+                      <div style="display:flex;align-items:center;gap:9px;background:#f9fafb;border:1px solid #eef0f3;border-radius:8px;padding:9px 12px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                        <span style="font-size:13px;color:#344054;font-weight:500">{{ f }}</span>
+                        <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#17b26a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ aNoFiles }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:13px;color:#98a2b3">尚未選擇檔案</div>
+                </sc-if>
+              </div>
+
+              <button onClick="{{ analyzeA }}" disabled="{{ aAnalyzeDisabled }}" style="{{ aAnalyzeBtnStyle }}">開始分析</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ANALYZING -->
+        <sc-if value="{{ aAnalyzing }}" hint-placeholder-val="">
+          <div style="padding:70px 26px 80px;display:flex;justify-content:center">
+            <div style="width:460px;text-align:center">
+              <div style="width:46px;height:46px;border-radius:50%;border:3px solid #e4e7ec;border-top-color:#4f46e5;margin:0 auto 24px;animation:none"></div>
+              <div style="font-size:16px;font-weight:700;margin-bottom:6px">{{ aStepLabel }}</div>
+              <div style="font-size:13px;color:#98a2b3;margin-bottom:22px">分析中，請稍候…</div>
+              <div style="height:8px;background:#eaecf0;border-radius:99px;overflow:hidden">
+                <div style="height:100%;background:#4f46e5;border-radius:99px;transition:width .25s ease;width:{{ aProgress }}"></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- DONE -->
+        <sc-if value="{{ aDone }}" hint-placeholder-val="">
+          <div style="padding:22px 26px 30px">
+            <!-- summary stats -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
+              <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;padding:16px 18px">
+                <div style="font-size:12px;color:#98a2b3;font-weight:500;margin-bottom:6px">指標總數</div>
+                <div style="font-size:26px;font-weight:700;color:#1d2939;font-variant-numeric:tabular-nums">{{ sTotal }}</div>
+              </div>
+              <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;padding:16px 18px">
+                <div style="font-size:12px;color:#98a2b3;font-weight:500;margin-bottom:6px">觸發</div>
+                <div style="font-size:26px;font-weight:700;color:#b42318;font-variant-numeric:tabular-nums">{{ sTrig }}</div>
+              </div>
+              <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;padding:16px 18px">
+                <div style="font-size:12px;color:#98a2b3;font-weight:500;margin-bottom:6px">未觸發</div>
+                <div style="font-size:26px;font-weight:700;color:#067647;font-variant-numeric:tabular-nums">{{ sNot }}</div>
+              </div>
+              <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;padding:16px 18px">
+                <div style="font-size:12px;color:#98a2b3;font-weight:500;margin-bottom:6px">缺資料</div>
+                <div style="font-size:26px;font-weight:700;color:#667085;font-variant-numeric:tabular-nums">{{ sMiss }}</div>
+              </div>
+            </div>
+
+            <!-- tabs -->
+            <div style="display:flex;gap:4px;border-bottom:1px solid #eaecf0;margin-bottom:20px">
+              <button onClick="{{ goNarrA }}" style="{{ aTabNarrStyle }}">生成段落</button>
+              <button onClick="{{ goDataA }}" style="{{ aTabDataStyle }}">財報資料</button>
+              <button onClick="{{ goRiskA }}" style="{{ aTabRiskStyle }}">風險判定</button>
+            </div>
+
+            <!-- TAB: 生成段落 -->
+            <sc-if value="{{ aTabNarr }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <sc-for list="{{ narrList }}" as="n" hint-placeholder-count="5">
+                  <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;padding:20px 22px;border-left:3px solid #4f46e5">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                      <span style="font-size:13px;font-weight:700;color:#4f46e5;font-variant-numeric:tabular-nums">{{ n.code }}</span>
+                      <span style="font-size:15px;font-weight:700;color:#1d2939">{{ n.title }}</span>
+                      <span style="margin-left:auto;font-size:11px;color:#cbd2dc;font-weight:600;letter-spacing:.05em">AI 生成</span>
+                    </div>
+                    <p style="margin:0;font-size:14px;line-height:1.85;color:#475467;text-align:justify;text-wrap:pretty">{{ n.text }}</p>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <!-- TAB: 財報資料 -->
+            <sc-if value="{{ aTabData }}" hint-placeholder-val="">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <sc-for list="{{ finGroups }}" as="g" hint-placeholder-count="4">
+                  <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;overflow:hidden">
+                    <div style="padding:12px 16px;background:#f9fafb;border-bottom:1px solid #eef0f3;font-size:13px;font-weight:700;color:#344054">{{ g.title }}</div>
+                    <div style="padding:6px 16px 12px">
+                      <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:8px;padding:8px 0;border-bottom:1px solid #f2f4f7;font-size:11px;color:#98a2b3;font-weight:600">
+                        <span>科目</span><span style="text-align:right">{{ p0 }}</span><span style="text-align:right">{{ p1 }}</span>
+                      </div>
+                      <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+                        <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:8px;padding:9px 0;border-bottom:1px solid #f6f7f9;font-size:13px;align-items:baseline">
+                          <span style="color:#475467">{{ r.name }}<span style="color:#cbd2dc;font-size:11px;margin-left:5px">{{ r.unit }}</span></span>
+                          <span style="text-align:right;font-variant-numeric:tabular-nums;color:#1d2939;font-weight:500">{{ r.d0 }}</span>
+                          <span style="text-align:right;font-variant-numeric:tabular-nums;color:#98a2b3">{{ r.d1 }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <!-- TAB: 風險判定 -->
+            <sc-if value="{{ aTabRisk }}" hint-placeholder-val="">
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <sc-for list="{{ riskSecs }}" as="sec" hint-placeholder-count="5">
+                  <div style="background:#fff;border:1px solid #eaecf0;border-radius:13px;overflow:hidden">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;background:#f9fafb;border-bottom:1px solid #eef0f3">
+                      <div style="font-size:14px;font-weight:700;color:#1d2939"><span style="color:#4f46e5;margin-right:8px">{{ sec.code }}</span>{{ sec.name }}</div>
+                      <div style="font-size:12px;color:#98a2b3">觸發 <span style="color:#b42318;font-weight:700">{{ sec.triggeredCount }}</span> / {{ sec.total }}</div>
+                    </div>
+                    <div style="padding:4px 18px 10px">
+                      <sc-for list="{{ sec.inds }}" as="ind" hint-placeholder-count="3">
+                        <div style="padding:12px 0;border-bottom:1px solid #f6f7f9">
+                          <div style="display:flex;align-items:center;gap:12px">
+                            <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:{{ ind.badgeBg }};color:{{ ind.badgeColor }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ ind.dot }}"></span>{{ ind.statusLabel }}</span>
+                            <span style="font-size:14px;color:#344054;font-weight:500">{{ ind.name }}</span>
+                            <span style="margin-left:auto;font-size:14px;font-variant-numeric:tabular-nums;font-weight:700;color:#1d2939">{{ ind.curDisp }}</span>
+                            <span style="font-size:12px;font-variant-numeric:tabular-nums;color:#cbd2dc;width:78px;text-align:right">前期 {{ ind.prevDisp }}</span>
+                          </div>
+                          <sc-if value="{{ ind.isTriggered }}" hint-placeholder-val="">
+                            <div style="margin-top:8px;margin-left:2px;display:flex;gap:8px;align-items:baseline">
+                              <span style="font-size:11px;font-weight:700;color:#b42318;background:#fef3f2;padding:2px 7px;border-radius:5px;font-variant-numeric:tabular-nums">門檻 {{ ind.threshold }}</span>
+                              <span style="font-size:13px;color:#667085;line-height:1.5">{{ ind.desc }}</span>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+</section>
+
+<!-- JSON overlay -->
+<sc-if value="{{ anyJson }}" hint-placeholder-val="">
+  <div onClick="{{ closeJson }}" style="position:fixed;inset:0;background:rgba(16,24,40,.5);z-index:50;display:flex;align-items:center;justify-content:center;padding:40px">
+    <div onClick="{{ stop }}" style="width:720px;max-height:82vh;background:#0d1117;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 40px 80px -20px rgba(0,0,0,.5)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid #21262d">
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7ee2c9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1"/></svg>
+          <span style="color:#e6edf3;font-size:14px;font-weight:700">最終輸出 · risk_report.json</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onClick="{{ copyJson }}" style="cursor:pointer;border:1px solid #30363d;background:#161b22;color:#c9d1d9;font-size:12px;font-weight:600;padding:7px 13px;border-radius:7px;font-family:inherit">{{ copyLabel }}</button>
+          <button onClick="{{ downloadJson }}" style="cursor:pointer;border:none;background:#238636;color:#fff;font-size:12px;font-weight:700;padding:7px 13px;border-radius:7px;font-family:inherit">下載 .json</button>
+          <button onClick="{{ closeJson }}" style="cursor:pointer;border:1px solid #30363d;background:#161b22;color:#8b949e;font-size:12px;padding:7px 11px;border-radius:7px;font-family:inherit">關閉</button>
+        </div>
+      </div>
+      <pre style="margin:0;padding:20px 22px;overflow:auto;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.65;color:#c9d1d9;white-space:pre">{{ jsonStr }}</pre>
+    </div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  SAMPLE = ["財報_1財務概況.html","財報_2財務比率.html","財報_3現金流量.html","財報_4淨值調節.html"];
+  STEPS = ["解析 HTML 財報","載入 7大指標設定","風險判定","組裝 Prompt","模型生成段落","輸出 JSON"];
+
+  PERIODS = ["113/09/30","112/12/31","111/12/31"];
+
+  FIN = [
+    { group:"財務概況", rows:[
+      { name:"資產總額", unit:"仟元", v:[8452310,8120540,7890220] },
+      { name:"負債總額", unit:"仟元", v:[5238900,4860120,4510300] },
+      { name:"股東權益總額", unit:"仟元", v:[3213410,3260420,3379920] },
+      { name:"流動資產", unit:"仟元", v:[3120450,3340220,3210100] },
+      { name:"流動負債", unit:"仟元", v:[2980600,2510300,2300450] },
+    ]},
+    { group:"財務比率（來源科目）", rows:[
+      { name:"存貨", unit:"仟元", v:[1240300,980200,910500] },
+      { name:"應收帳款", unit:"仟元", v:[1080200,1150400,1090300] },
+      { name:"營業收入淨額", unit:"仟元", v:[6540200,6120800,5980400] },
+      { name:"營業毛利", unit:"仟元", v:[1046430,1053500,1041300] },
+    ]},
+    { group:"現金流量", rows:[
+      { name:"營業活動之現金流量", unit:"仟元", v:[420300,680500,720100] },
+      { name:"投資活動之現金流量", unit:"仟元", v:[-310200,-450300,-280100] },
+      { name:"籌資活動之現金流量", unit:"仟元", v:[-180500,-150200,-90400] },
+      { name:"期末現金及約當現金", unit:"仟元", v:[560400,630800,550200] },
+    ]},
+    { group:"淨值調節", rows:[
+      { name:"期初股東權益", unit:"仟元", v:[3260420,3379920,3230100] },
+      { name:"本期淨利", unit:"仟元", v:[210300,305600,410200] },
+      { name:"發放現金股利", unit:"仟元", v:[-150000,-180000,-160000] },
+      { name:"期末股東權益", unit:"仟元", v:[3213410,3260420,3379920] },
+    ]},
+  ];
+
+  RISK = [
+    { code:"4-1", name:"財務結構", inds:[
+      { name:"負債比率", unit:"%", cur:"61.98", prev:"59.85", status:"triggered", threshold:">60.0", desc:"負債比率上升並突破 60% 警戒水準，財務結構中舉債比重偏高。" },
+      { name:"淨值比率", unit:"%", cur:"38.02", prev:"40.15", status:"not_triggered", threshold:"", desc:"" },
+      { name:"長期資金佔不動產廠房設備比率", unit:"%", cur:null, prev:null, status:"missing", threshold:"", desc:"" },
+    ]},
+    { code:"4-2", name:"償債能力", inds:[
+      { name:"流動比率", unit:"%", cur:"104.69", prev:"133.06", status:"triggered", threshold:"<150.0", desc:"流動比率明顯下降，短期償債能力轉弱。" },
+      { name:"速動比率", unit:"%", cur:"63.06", prev:"93.98", status:"triggered", threshold:"<100.0", desc:"速動比率偏低，扣除存貨後即時償債能力不足。" },
+      { name:"利息保障倍數", unit:"倍", cur:"4.80", prev:"6.20", status:"not_triggered", threshold:"", desc:"" },
+    ]},
+    { code:"4-3", name:"經營效能", inds:[
+      { name:"應收帳款週轉率", unit:"次", cur:"5.90", prev:"6.40", status:"not_triggered", threshold:"", desc:"" },
+      { name:"存貨週轉率", unit:"次", cur:"4.20", prev:"5.10", status:"triggered", threshold:"<5.0", desc:"存貨週轉率下降，去化速度趨緩、營運資金占用增加。" },
+      { name:"總資產週轉率", unit:"次", cur:"0.78", prev:"0.82", status:"not_triggered", threshold:"", desc:"" },
+    ]},
+    { code:"4-4", name:"獲利能力", inds:[
+      { name:"資產報酬率", unit:"%", cur:"2.90", prev:"4.10", status:"triggered", threshold:"<3.5", desc:"資產報酬率下滑，資產運用效益減弱。" },
+      { name:"股東權益報酬率", unit:"%", cur:"6.50", prev:"9.20", status:"triggered", threshold:"<8.0", desc:"ROE 較前期明顯下降，股東回報動能走弱。" },
+      { name:"純益率", unit:"%", cur:"3.20", prev:"3.90", status:"not_triggered", threshold:"", desc:"" },
+      { name:"每股盈餘", unit:"元", cur:"1.35", prev:"1.98", status:"not_triggered", threshold:"", desc:"" },
+    ]},
+    { code:"4-5", name:"現金流量", inds:[
+      { name:"現金流量比率", unit:"%", cur:"14.10", prev:"27.10", status:"triggered", threshold:"<20.0", desc:"現金流量比率偏低，營業現金對短期負債支應能力下降。" },
+      { name:"現金流量允當比率", unit:"%", cur:"88.50", prev:"105.20", status:"triggered", threshold:"<100.0", desc:"現金流量允當比率不足 100%，難完全支應資本支出與股利。" },
+      { name:"現金再投資比率", unit:"%", cur:null, prev:null, status:"missing", threshold:"", desc:"" },
+    ]},
+  ];
+
+  NARR = {
+    "4-1":"截至113年9月30日，公司資產總額為84.5億元、負債總額54.5億元，負債比率上升至61.98%，較前期59.85%增加逾2個百分點，已高於60%之警戒水準，顯示財務結構中舉債比重偏高；淨值比率相應降至38.02%。整體長期償債基礎略為弱化，建議持續關注負債結構與到期集中度。",
+    "4-2":"流動比率由前期133.06%降至104.69%，速動比率亦由93.98%下滑至63.06%，二者均低於健全水準，反映短期償債能力明顯轉弱，主因流動負債成長幅度高於流動資產且存貨占比提升。利息保障倍數維持約4.8倍尚屬合理，惟仍須留意營運現金支應利息之穩定性。",
+    "4-3":"存貨週轉率由5.1次降至4.2次，去化速度趨緩，存貨水位由9.8億元升至12.4億元，占用營運資金；應收帳款週轉率5.9次、總資產週轉率0.78次尚屬平穩。整體營運效率略降，建議加強存貨控管與收款政策以釋放營運資金。",
+    "4-4":"本期資產報酬率降至2.9%、股東權益報酬率降至6.5%，較前期分別下滑約1.2及2.7個百分點，獲利動能減弱；純益率3.2%、每股盈餘1.35元仍維持獲利。獲利下滑主要受毛利率壓縮與利息費用增加影響，建議檢視成本結構與定價策略。",
+    "4-5":"營業活動淨現金流入4.2億元，較前期6.8億元縮減；現金流量比率降至14.1%、現金流量允當比率88.5%，均低於100%之充足水準，顯示營業現金對短期負債及資本支出之支應能力下降。建議強化營運資金管理並審慎規劃投資與股利政策。",
+  };
+
+  state = {
+    a: { stage:"upload", tab:"narr", files:[], json:false, animStep:0, copied:false },
+  };
+
+  _set(patch){ this.setState(s => ({ a: { ...s.a, ...patch } })); }
+
+  _pick(e){
+    const names = [...(e.target.files||[])].map(f => f.name);
+    if (names.length) this._set({ files: names });
+  }
+  _sample(){ this._set({ files: [...this.SAMPLE] }); }
+  _analyze(){
+    this._set({ stage:"analyzing", animStep:0 });
+    let i = 0;
+    const t = setInterval(() => {
+      i++;
+      if (i >= this.STEPS.length) { clearInterval(t); this._set({ stage:"done", animStep:this.STEPS.length }); }
+      else { this._set({ animStep:i }); }
+    }, 300);
+  }
+  _reset(){ this._set({ stage:"upload", files:[], json:false, animStep:0 }); }
+  _tab(t){ this._set({ tab:t }); }
+  _toggleJson(){ this.setState(s => ({ a: { ...s.a, json: !s.a.json } })); }
+  _closeJson(){ this._set({ json:false }); }
+  _copy(){
+    try { navigator.clipboard.writeText(this._jsonStr); } catch(e) {}
+    this._set({ copied:true });
+    setTimeout(() => this._set({ copied:false }), 1500);
+  }
+  _download(){
+    const blob = new Blob([this._jsonStr], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "risk_report_23295097_20240930.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  _fmt(v){
+    if (v == null) return "—";
+    const neg = v < 0;
+    const s = Math.abs(v).toLocaleString("en-US");
+    return neg ? "(" + s + ")" : s;
+  }
+
+  _statusMeta(st){
+    if (st === "triggered") return { statusLabel:"觸發", badgeBg:"#fef3f2", badgeColor:"#b42318", dot:"#f04438" };
+    if (st === "not_triggered") return { statusLabel:"未觸發", badgeBg:"#ecfdf3", badgeColor:"#067647", dot:"#17b26a" };
+    return { statusLabel:"缺資料", badgeBg:"#f2f4f7", badgeColor:"#475467", dot:"#98a2b3" };
+  }
+
+  _tabStyle(active){
+    const base = "cursor:pointer;background:none;border:none;font-family:inherit;font-size:14px;padding:10px 16px;margin-bottom:-1px;";
+    return active
+      ? base + "color:#4f46e5;font-weight:700;border-bottom:2px solid #4f46e5"
+      : base + "color:#667085;font-weight:500;border-bottom:2px solid transparent";
+  }
+
+  _buildDerived(){
+    const finGroups = this.FIN.map(g => ({
+      title: g.group,
+      rows: g.rows.map(r => ({
+        name: r.name, unit: r.unit,
+        d0: this._fmt(r.v[0]), d1: this._fmt(r.v[1]), d2: this._fmt(r.v[2]),
+      })),
+    }));
+
+    let trig=0, not=0, miss=0, total=0;
+    const riskSecs = this.RISK.map(sec => {
+      let tc = 0;
+      const inds = sec.inds.map(ind => {
+        total++;
+        if (ind.status === "triggered") { trig++; tc++; }
+        else if (ind.status === "not_triggered") not++;
+        else miss++;
+        const m = this._statusMeta(ind.status);
+        return {
+          name: ind.name,
+          curDisp: ind.cur != null ? ind.cur + ind.unit : "—",
+          prevDisp: ind.prev != null ? ind.prev + ind.unit : "—",
+          isTriggered: ind.status === "triggered",
+          threshold: ind.threshold, desc: ind.desc,
+          statusLabel: m.statusLabel, badgeBg: m.badgeBg, badgeColor: m.badgeColor, dot: m.dot,
+        };
+      });
+      return { code: sec.code, name: sec.name, total: sec.inds.length, triggeredCount: tc, inds };
+    });
+
+    const narrList = this.RISK.map(sec => ({ code: sec.code, title: sec.name, text: this.NARR[sec.code] }));
+
+    const summary = { total, trig, not, miss };
+
+    const sectionsObj = {};
+    this.RISK.forEach(sec => {
+      sectionsObj[sec.code + " " + sec.name] = sec.inds.map(ind => {
+        const tag = ind.status === "triggered"
+          ? { status:"triggered", threshold: ind.threshold, description: ind.desc }
+          : { status: ind.status };
+        return {
+          indicator_name: ind.name,
+          current_display: ind.cur != null ? ind.cur + ind.unit : null,
+          previous_display: ind.prev != null ? ind.prev + ind.unit : null,
+          taggings: [tag],
+        };
+      });
+    });
+    const obj = {
+      schema_version: "1.0",
+      request_id: "3f9a1c07",
+      customer_id: "23295097",
+      report_date: "20240930",
+      industry: "7大指標",
+      risk_report: {
+        customer_id: "23295097",
+        report_date: "20240930",
+        industry: "7大指標",
+        summary: {
+          total_sections: this.RISK.length,
+          total_indicators: total,
+          triggered_count: trig,
+          not_triggered_count: not,
+          missing_count: miss,
+          total_rules: total,
+        },
+        sections: sectionsObj,
+      },
+      risk_sections: this.NARR,
+      narrative_prompt: "（已依 narrative_filter 組裝，約 3,120 字，此處省略）",
+      risk_prompt: "（已依風險判定結果組裝，約 2,458 字，此處省略）",
+    };
+    const jsonStr = JSON.stringify(obj, null, 2);
+
+    return { finGroups, riskSecs, narrList, summary, jsonStr };
+  }
+
+  renderVals(){
+    const a = this.state.a;
+    const d = this._buildDerived();
+    this._jsonStr = d.jsonStr;
+
+    const aProgress = Math.round(a.animStep / this.STEPS.length * 100) + "%";
+    const aStepLabel = this.STEPS[Math.min(a.animStep, this.STEPS.length - 1)];
+
+    const disabledBtn = "cursor:not-allowed;margin-top:22px;width:100%;border:none;background:#e4e7ec;color:#98a2b3;font-size:15px;font-weight:700;padding:14px;border-radius:11px;font-family:inherit";
+    const activeBtnA = "cursor:pointer;margin-top:22px;width:100%;border:none;background:#4f46e5;color:#fff;font-size:15px;font-weight:700;padding:14px;border-radius:11px;font-family:inherit";
+
+    return {
+      finGroups: d.finGroups, riskSecs: d.riskSecs, narrList: d.narrList, jsonStr: d.jsonStr,
+      sTotal: d.summary.total, sTrig: d.summary.trig, sNot: d.summary.not, sMiss: d.summary.miss,
+      p0: this.PERIODS[0], p1: this.PERIODS[1], p2: this.PERIODS[2],
+      customerId: "23295097", reportDateDisp: "2024/09/30", requestId: "3f9a1c07",
+
+      aUpload: a.stage === "upload", aAnalyzing: a.stage === "analyzing", aDone: a.stage === "done",
+      aFiles: a.files, aHasFiles: a.files.length > 0, aNoFiles: a.files.length === 0,
+      aAnalyzeDisabled: a.files.length === 0,
+      aAnalyzeBtnStyle: a.files.length === 0 ? disabledBtn : activeBtnA,
+      aProgress, aStepLabel,
+      aTabNarr: a.tab === "narr", aTabData: a.tab === "data", aTabRisk: a.tab === "risk",
+      aTabNarrStyle: this._tabStyle(a.tab === "narr"),
+      aTabDataStyle: this._tabStyle(a.tab === "data"),
+      aTabRiskStyle: this._tabStyle(a.tab === "risk"),
+      pickA: (e) => this._pick(e),
+      sampleA: () => this._sample(),
+      analyzeA: () => this._analyze(),
+      resetA: () => this._reset(),
+      goNarrA: () => this._tab("narr"),
+      goDataA: () => this._tab("data"),
+      goRiskA: () => this._tab("risk"),
+      toggleJsonA: () => this._toggleJson(),
+
+      anyJson: a.json,
+      copyLabel: a.copied ? "已複製 ✓" : "複製",
+      copyJson: () => this._copy(),
+      downloadJson: () => this._download(),
+      closeJson: () => this._closeJson(),
+      stop: (e) => e.stopPropagation(),
+    };
+  }
+}
+</script>
+</body>
+</html>

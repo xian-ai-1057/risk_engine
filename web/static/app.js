@@ -1,7 +1,7 @@
 /* ============================================================
    風險分析Demo — front-end logic
    Binds the risk engine's output (risk_report / grouped_report /
-   prompts / generated sections) to the dashboard. Vanilla JS, no build.
+   prompts / generated sections) to the wizard UI. Vanilla JS, no build.
    ============================================================ */
 "use strict";
 
@@ -12,9 +12,23 @@ const SECTION_TO_NUM = {
   "獲利能力": "4-4", "現金流量": "4-5",
 };
 const STATUS_TEXT = { triggered: "觸發", not_triggered: "未觸發", missing: "缺資料" };
-const PERIOD_COLS = [
-  ["Current", "當期"], ["Period_2", "前期"], ["Period_3", "前前期"],
+
+// Canonical upload slots — filename keyword match, falling back to the
+// repo's own `財報_<n><label>.html` digit convention, falling back to
+// raw pick-order (with a visible warning) since a multi-file <input>
+// does not guarantee the browser preserves click order.
+const SLOT_DEFS = [
+  { field: "file_overview", label: "財務概況", digit: 1, re: /財務概況|概況|overview/i },
+  { field: "file_ratio", label: "財務比率", digit: 2, re: /財務比率|比率|ratio/i },
+  { field: "file_cashflow", label: "現金流量", digit: 3, re: /現金流量|現金流|cashflow|cash/i },
+  { field: "file_equity", label: "淨值調節", digit: 4, re: /淨值調節|淨值|權益|equity/i },
 ];
+const SLOT_MARKS = ["①", "②", "③", "④"];
+
+const STEP_LABELS = ["讀取財報 HTML…", "解析財務科目…", "比對風險指標門檻…", "彙整多期趨勢…", "整理最終報告…"];
+const STEP_LABELS_GEN = ["讀取財報 HTML…", "解析財務科目…", "比對風險指標門檻…", "彙整多期趨勢…", "呼叫 LLM 生成敘述…", "整理最終報告…"];
+
+const ICON_INFO_SVG = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4"/><path d="M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>';
 
 // ── DOM helpers ────────────────────────────────────────────
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -43,55 +57,98 @@ function fmtNum(v) {
   return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-// ── State views ────────────────────────────────────────────
-const view = {
-  empty:   $("#empty-state"),
-  loading: $("#loading-state"),
-  error:   $("#error-state"),
-  report:  $("#report"),
-};
-function show(which, msg) {
-  for (const k of Object.keys(view)) view[k].hidden = k !== which;
-  if (which === "loading" && msg) $("#loading-text").textContent = msg;
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+function triggeredCount(entries) {
+  let n = 0;
+  for (const e of entries || []) for (const t of e.taggings || []) if (t.status === "triggered") n++;
+  return n;
+}
+
+function orderedSections(data) {
+  const keys = new Set([
+    ...Object.keys(data.risk_report?.sections || {}),
+    ...Object.keys(data.grouped_report || {}),
+  ]);
+  const ordered = SECTION_ORDER.filter((s) => keys.has(s));
+  for (const k of keys) if (!ordered.includes(k)) ordered.push(k);
+  return ordered;
+}
+
+// ── State ──────────────────────────────────────────────────
+const state = {
+  stage: "upload",
+  tab: "narr",
+  slotFiles: [null, null, null, null],
+  lastResult: null,
+  analyzeTimer: null,
+  progressTimer: null,
+};
+
+function setStage(name) {
+  state.stage = name;
+  $("#stage-upload").hidden = name !== "upload";
+  $("#stage-analyzing").hidden = name !== "analyzing";
+  $("#stage-done").hidden = name !== "done";
+  $("#header-done").hidden = name !== "done";
+}
+
 function showError(msg) {
-  view.error.innerHTML = "";
-  view.error.appendChild(el("strong", { text: "分析失敗 " }));
-  view.error.appendChild(document.createTextNode(msg));
-  show("error");
+  const banner = $("#error-banner");
+  banner.textContent = "分析失敗：" + msg;
+  banner.hidden = false;
 }
 
 // ── Bootstrap ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   refreshHealth();
   loadIndustries();
+  renderFileChips();
 
+  $("#file-picker").addEventListener("change", (e) => handleFilePick(e.target.files));
+  $("#btn-sample").addEventListener("click", onSampleClick);
+  $("#btn-analyze").addEventListener("click", onAnalyzeClick);
+  $("#btn-export-json").addEventListener("click", openJsonModal);
+  $("#btn-reset").addEventListener("click", resetToUpload);
+
+  $("#industry").addEventListener("change", updateAnalyzeButtonState);
   const gen = $("#generate");
   gen.addEventListener("change", () => {
-    const cfg = $("#llm-config");
-    cfg.hidden = !gen.checked;
-    for (const id of ["llm_base_url", "llm_model", "llm_api_key"]) {
-      $("#" + id).required = gen.checked;
-    }
+    $("#llm-config").hidden = !gen.checked;
+    updateAnalyzeButtonState();
   });
+  for (const id of ["llm_base_url", "llm_model", "llm_api_key"]) {
+    $("#" + id).addEventListener("input", updateAnalyzeButtonState);
+  }
 
-  $("#analyze-form").addEventListener("submit", onAnalyze);
-  $("#btn-sample").addEventListener("click", onSample);
+  $("#tab-btn-narr").addEventListener("click", () => switchTab("narr"));
+  $("#tab-btn-data").addEventListener("click", () => switchTab("data"));
+  $("#tab-btn-risk").addEventListener("click", () => switchTab("risk"));
+
+  $("#btn-copy-json").addEventListener("click", copyJson);
+  $("#btn-download-json").addEventListener("click", downloadJson);
+  $("#btn-close-json").addEventListener("click", closeJsonModal);
+  $("#json-modal").addEventListener("click", (e) => {
+    if (e.target.id === "json-modal") closeJsonModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("#json-modal").hidden) closeJsonModal();
+  });
 });
 
 async function refreshHealth() {
-  const box = $("#health");
+  const warn = $("#health-warning");
   try {
     const r = await fetch("/api/health");
     const h = await r.json();
     const ok = h.status === "ok" && h.has_xlsx;
-    box.className = "topbar__health " + (ok ? "ok" : "bad");
-    box.innerHTML = "";
-    box.appendChild(el("span", { class: "dot" }));
-    box.appendChild(document.createTextNode(ok ? "引擎資源就緒" : "資源不完整"));
+    warn.hidden = ok;
+    if (!ok) warn.textContent = `伺服器資源不完整（${h.status}），分析功能可能無法使用。`;
   } catch {
-    box.className = "topbar__health bad";
-    box.textContent = "無法連線";
+    warn.hidden = false;
+    warn.textContent = "無法連線至伺服器。";
   }
 }
 
@@ -109,285 +166,384 @@ async function loadIndustries() {
     sel.appendChild(el("option", { value: "", disabled: true, selected: true, text: "產業別載入失敗" }));
     console.error("loadIndustries", e);
   }
+  updateAnalyzeButtonState();
+}
+
+// ── File slot matching ──────────────────────────────────────
+function matchSlots(files) {
+  const assigned = new Array(SLOT_DEFS.length).fill(null);
+  const usedFileIdx = new Set();
+
+  SLOT_DEFS.forEach((slot, si) => {
+    for (let fi = 0; fi < files.length; fi++) {
+      if (usedFileIdx.has(fi)) continue;
+      if (slot.re.test(files[fi].name)) {
+        assigned[si] = files[fi];
+        usedFileIdx.add(fi);
+        break;
+      }
+    }
+  });
+  SLOT_DEFS.forEach((slot, si) => {
+    if (assigned[si]) return;
+    const digitRe = new RegExp(`(^|[^0-9])${slot.digit}([^0-9]|$)`);
+    for (let fi = 0; fi < files.length; fi++) {
+      if (usedFileIdx.has(fi)) continue;
+      if (digitRe.test(files[fi].name)) {
+        assigned[si] = files[fi];
+        usedFileIdx.add(fi);
+        break;
+      }
+    }
+  });
+  return assigned.every(Boolean) ? assigned : null;
+}
+
+function handleFilePick(fileList) {
+  const files = Array.from(fileList || []);
+  const note = $("#filelist-note");
+  note.hidden = true;
+
+  if (files.length !== 4) {
+    state.slotFiles = [null, null, null, null];
+    if (files.length > 0) {
+      note.hidden = false;
+      note.textContent = `請選擇正好 4 個檔案（目前 ${files.length} 個）`;
+    }
+    renderFileChips();
+    updateAnalyzeButtonState();
+    return;
+  }
+
+  const matched = matchSlots(files);
+  if (matched) {
+    state.slotFiles = matched;
+  } else {
+    state.slotFiles = files.slice(0, 4);
+    note.hidden = false;
+    note.textContent = "檔名未包含可辨識關鍵字，已依選取順序對應 ①②③④，請確認順序是否正確。";
+  }
+  renderFileChips();
+  updateAnalyzeButtonState();
+}
+
+function renderFileChips() {
+  const wrap = $("#filelist");
+  wrap.innerHTML = "";
+  const any = state.slotFiles.some(Boolean);
+  $("#filelist-empty").hidden = any;
+  SLOT_DEFS.forEach((slot, i) => {
+    const f = state.slotFiles[i];
+    if (!f) return;
+    wrap.appendChild(el("div", { class: "filechip" }, [
+      el("span", { class: "filechip__slot", text: SLOT_MARKS[i] }),
+      el("span", { class: "filechip__name", text: f.name }),
+      el("span", { class: "filechip__check", text: "✓" }),
+    ]));
+  });
+}
+
+function updateAnalyzeButtonState() {
+  const allFiles = state.slotFiles.every(Boolean);
+  const industryOk = !!$("#industry").value;
+  const genChecked = $("#generate").checked;
+  const llmOk = !genChecked || ["llm_base_url", "llm_model", "llm_api_key"]
+    .every((id) => $("#" + id).value.trim() !== "");
+  $("#btn-analyze").disabled = !(allFiles && industryOk && llmOk);
+}
+
+// ── Analyzing-stage animation ───────────────────────────────
+function startAnalyzingAnimation(generate) {
+  const labels = generate ? STEP_LABELS_GEN : STEP_LABELS;
+  let i = 0;
+  $("#analyzing-label").textContent = labels[0];
+  state.analyzeTimer = setInterval(() => {
+    i = (i + 1) % labels.length;
+    $("#analyzing-label").textContent = labels[i];
+  }, 1800);
+
+  const start = performance.now();
+  $("#progress-fill").style.width = "0%";
+  state.progressTimer = setInterval(() => {
+    const elapsedSec = (performance.now() - start) / 1000;
+    const pct = 92 * (1 - Math.exp(-elapsedSec / 8));
+    $("#progress-fill").style.width = pct.toFixed(1) + "%";
+  }, 200);
+}
+
+function stopAnalyzingAnimation() {
+  clearInterval(state.analyzeTimer);
+  clearInterval(state.progressTimer);
+  state.analyzeTimer = null;
+  state.progressTimer = null;
 }
 
 // ── Actions ────────────────────────────────────────────────
-async function onSample() {
-  show("loading", "載入範例資料…");
+async function onSampleClick() {
+  $("#error-banner").hidden = true;
+  setStage("analyzing");
+  startAnalyzingAnimation(false);
   try {
-    const r = await fetch("/api/sample");
-    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    renderReport(await r.json());
+    const [data] = await Promise.all([
+      fetch("/api/sample").then(async (r) => {
+        if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+        return r.json();
+      }),
+      delay(900),
+    ]);
+    finishAnalyzing(data);
   } catch (e) {
+    stopAnalyzingAnimation();
+    setStage("upload");
     showError(e.message);
   }
 }
 
-async function onAnalyze(ev) {
-  ev.preventDefault();
-  const form = ev.currentTarget;
-  const btn = $("#btn-analyze");
-  const fd = new FormData(form);
-  fd.set("generate", $("#generate").checked ? "true" : "false");
+async function onAnalyzeClick() {
+  const generate = $("#generate").checked;
+  const fd = new FormData();
+  fd.append("file_overview", state.slotFiles[0]);
+  fd.append("file_ratio", state.slotFiles[1]);
+  fd.append("file_cashflow", state.slotFiles[2]);
+  fd.append("file_equity", state.slotFiles[3]);
+  fd.append("industry", $("#industry").value);
+  fd.append("customer_id", $("#customer_id").value);
+  fd.append("report_date", $("#report_date").value);
+  fd.append("generate", generate ? "true" : "false");
+  if (generate) {
+    fd.append("llm_base_url", $("#llm_base_url").value);
+    fd.append("llm_model", $("#llm_model").value);
+    fd.append("llm_api_key", $("#llm_api_key").value);
+  }
 
-  btn.disabled = true;
-  show("loading", $("#generate").checked ? "分析中，並呼叫 LLM 生成敘述…" : "分析中…");
+  $("#error-banner").hidden = true;
+  setStage("analyzing");
+  startAnalyzingAnimation(generate);
+
   try {
     const r = await fetch("/api/analyze", { method: "POST", body: fd });
     const data = await r.json();
     if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
-    renderReport(data);
+    finishAnalyzing(data);
   } catch (e) {
+    stopAnalyzingAnimation();
+    setStage("upload");
     showError(e.message);
-  } finally {
-    btn.disabled = false;
   }
 }
 
-// ── Rendering ──────────────────────────────────────────────
-function orderedSections(data) {
-  const keys = new Set([
-    ...Object.keys(data.risk_report?.sections || {}),
-    ...Object.keys(data.grouped_report || {}),
-  ]);
-  const ordered = SECTION_ORDER.filter((s) => keys.has(s));
-  for (const k of keys) if (!ordered.includes(k)) ordered.push(k);
-  return ordered;
+function finishAnalyzing(data) {
+  stopAnalyzingAnimation();
+  $("#progress-fill").style.width = "100%";
+  state.lastResult = data;
+  setTimeout(() => {
+    setStage("done");
+    renderDone(data);
+  }, 200);
 }
 
-function renderReport(data) {
-  const root = view.report;
+function resetToUpload() {
+  setStage("upload");
+  state.slotFiles = [null, null, null, null];
+  state.lastResult = null;
+  $("#file-picker").value = "";
+  $("#filelist-note").hidden = true;
+  $("#error-banner").hidden = true;
+  renderFileChips();
+  updateAnalyzeButtonState();
+}
+
+// ── Rendering: done stage ────────────────────────────────────
+function renderDone(data) {
+  const rr = data.risk_report || {};
+  $("#hdr-customer").textContent = data.customer_id || rr.customer_id || "—";
+  $("#hdr-date").textContent = data.report_date || rr.report_date || "—";
+  $("#hdr-request").textContent = data.request_id || "—";
+
+  const s = rr.summary || {};
+  $("#stat-total").textContent = s.total_indicators ?? "—";
+  $("#stat-trig").textContent = s.triggered_count ?? "—";
+  $("#stat-not").textContent = s.not_triggered_count ?? "—";
+  $("#stat-miss").textContent = s.missing_count ?? "—";
+
+  renderNarrTab(data);
+  renderDataTab(data);
+  renderRiskTab(data);
+  switchTab("narr");
+}
+
+function switchTab(name) {
+  state.tab = name;
+  for (const t of ["narr", "data", "risk"]) {
+    const isActive = t === name;
+    $("#tab-btn-" + t).classList.toggle("is-active", isActive);
+    $("#tab-btn-" + t).setAttribute("aria-selected", String(isActive));
+    $("#tabpanel-" + t).hidden = !isActive;
+  }
+}
+
+function renderNarrTab(data) {
+  const root = $("#tabpanel-narr");
+  root.innerHTML = "";
+  const hasNarrative = data.narrative_sections && Object.keys(data.narrative_sections).length;
+  const hasRisk = data.risk_sections && Object.keys(data.risk_sections).length;
+
+  if (!hasNarrative && !hasRisk) {
+    root.appendChild(el("div", { class: "narr-empty" }, [
+      el("div", { class: "stage-icon", html: ICON_INFO_SVG }),
+      el("div", { class: "narr-empty__title", text: "尚未啟用 LLM 生成敘述段落" }),
+      el("p", { class: "narr-empty__sub", text: "請於「進階設定」開啟「呼叫 LLM 生成敘述段落」並填寫端點資訊後重新分析。" }),
+    ]));
+    return;
+  }
+
+  for (const name of orderedSections(data)) {
+    const num = SECTION_TO_NUM[name] || name;
+    const txt = (data.narrative_sections && data.narrative_sections[num])
+      ?? (data.risk_sections && data.risk_sections[num]);
+    root.appendChild(el("div", { class: "narr-card" }, [
+      el("div", { class: "narr-card__head" }, [
+        el("span", { class: "narr-card__code", text: num }),
+        el("span", { class: "narr-card__title", text: name }),
+        el("span", { class: "narr-card__tag", text: "AI 生成" }),
+      ]),
+      txt
+        ? el("p", { class: "narr-card__text", text: txt })
+        : el("p", { class: "narr-card__text narr-card__text--placeholder", text: "本段落尚未生成內容。" }),
+    ]));
+  }
+}
+
+function renderDataTab(data) {
+  const root = $("#tabpanel-data");
+  root.innerHTML = "";
+  const grouped = data.grouped_report || {};
+  const sections = orderedSections(data).filter((name) => grouped[name] && Object.keys(grouped[name]).length);
+
+  if (!sections.length) {
+    root.appendChild(el("p", { class: "filelist__empty", text: "無財報資料。" }));
+    return;
+  }
+
+  const grid = el("div", { class: "fin-grid" });
+  sections.forEach((name, i) => {
+    const wide = sections.length % 2 === 1 && i === sections.length - 1;
+    const rows = Object.entries(grouped[name]);
+    const card = el("div", { class: "fin-card" + (wide ? " fin-card--wide" : "") }, [
+      el("div", { class: "fin-card__head", text: name }),
+      el("div", { class: "fin-card__body", role: "table" }, [
+        el("div", { class: "fin-row fin-row--head", role: "row" }, [
+          el("span", { role: "columnheader", text: "科目" }),
+          el("span", { role: "columnheader", text: "當期" }),
+          el("span", { role: "columnheader", text: "前期" }),
+          el("span", { role: "columnheader", text: "前前期" }),
+        ]),
+        ...rows.map(([code, row]) => el("div", { class: "fin-row", role: "row" }, [
+          el("span", { class: "fin-row__name", role: "cell" }, [
+            row.FA_CANME || code,
+            el("span", { class: "fin-row__unit", text: row["單位"] || "" }),
+          ]),
+          el("span", { class: "fin-row__num fin-row__num--cur", role: "cell", text: fmtNum(row.Current) ?? "—" }),
+          el("span", { class: "fin-row__num fin-row__num--prev", role: "cell", text: fmtNum(row.Period_2) ?? "—" }),
+          el("span", { class: "fin-row__num fin-row__num--prev", role: "cell", text: fmtNum(row.Period_3) ?? "—" }),
+        ])),
+      ]),
+    ]);
+    grid.appendChild(card);
+  });
+  root.appendChild(grid);
+}
+
+function renderRiskTab(data) {
+  const root = $("#tabpanel-risk");
   root.innerHTML = "";
   const rr = data.risk_report || {};
-  const summary = rr.summary || {};
+  const sections = orderedSections(data).filter((name) => (rr.sections?.[name] || []).length);
 
-  root.appendChild(renderMeta(data));
-  root.appendChild(renderSummary(summary));
-
-  const sections = orderedSections(data);
-  const { tabs, pages } = renderTabs(data, sections);
-  root.appendChild(tabs);
-  root.appendChild(pages);
-
-  if (data.narrative_sections || data.risk_sections) {
-    root.appendChild(renderGenerated(data));
+  if (!sections.length) {
+    root.appendChild(el("p", { class: "filelist__empty", text: "無風險判定資料。" }));
+    return;
   }
-  root.appendChild(renderPrompts(data));
 
-  show("report");
-}
-
-function renderMeta(data) {
-  const rr = data.risk_report || {};
-  const meta = el("div", { class: "report-meta" });
-  const add = (label, val) => {
-    if (!val && val !== 0) return;
-    meta.appendChild(el("span", {}, [label + "：", el("b", { text: String(val) })]));
-  };
-  add("產業別", data.industry || rr.industry);
-  add("客戶", data.customer_id || rr.customer_id);
-  add("報告日期", data.report_date || rr.report_date);
-  add("規則總數", rr.summary?.total_rules);
-  add("request_id", data.request_id);
-  return meta;
-}
-
-function renderSummary(s) {
-  const wrap = el("div", { class: "summary" });
-  const cards = [
-    ["", "指標項目", s.total_indicators],
-    ["stat--warn", "觸發", s.triggered_count],
-    ["stat--ok", "未觸發", s.not_triggered_count],
-    ["stat--miss", "缺資料", s.missing_count],
-  ];
-  for (const [cls, cap, num] of cards) {
-    wrap.appendChild(el("div", { class: "stat " + cls }, [
-      el("div", { class: "stat__num", text: num == null ? "—" : String(num) }),
-      el("div", { class: "stat__cap", text: cap }),
-    ]));
-  }
-  return wrap;
-}
-
-function triggeredCount(entries) {
-  let n = 0;
-  for (const e of entries || []) for (const t of e.taggings || []) if (t.status === "triggered") n++;
-  return n;
-}
-
-function renderTabs(data, sections) {
-  const tabs = el("div", { class: "tabs", role: "tablist" });
-  const pages = el("div", { class: "tabpages" });
-  const rr = data.risk_report || {};
-
-  sections.forEach((name, i) => {
-    const entries = rr.sections?.[name] || [];
+  for (const name of sections) {
+    const entries = rr.sections[name] || [];
+    const num = SECTION_TO_NUM[name] || name;
     const trig = triggeredCount(entries);
-    const tab = el("button", { class: "tab" + (i === 0 ? " active" : ""), type: "button" }, [
-      name,
-      el("span", { class: "tab__count", "data-zero": String(trig === 0), text: String(trig) }),
-    ]);
-    const page = el("div", { class: "tabpage" + (i === 0 ? " active" : "") });
-    page.appendChild(renderSectionBody(name, entries, data.grouped_report?.[name]));
 
-    tab.addEventListener("click", () => {
-      $$(".tab", tabs).forEach((t) => t.classList.remove("active"));
-      $$(".tabpage", pages).forEach((p) => p.classList.remove("active"));
-      tab.classList.add("active");
-      page.classList.add("active");
-    });
-    tabs.appendChild(tab);
-    pages.appendChild(page);
-  });
-  return { tabs, pages };
+    const card = el("div", { class: "risk-card" });
+    card.appendChild(el("div", { class: "risk-card__head" }, [
+      el("div", { class: "risk-card__title" }, [
+        el("span", { class: "risk-card__code", text: num }), name,
+      ]),
+      el("div", { class: "risk-card__count" }, [
+        "觸發 ", el("b", { text: String(trig) }), ` / ${entries.length}`,
+      ]),
+    ]));
+    const body = el("div", { class: "risk-card__body" });
+    for (const e of entries) body.appendChild(renderRiskRow(e));
+    card.appendChild(body);
+    root.appendChild(card);
+  }
 }
 
-function renderSectionBody(name, entries, grouped) {
-  const frag = document.createDocumentFragment();
-  frag.appendChild(el("h3", { class: "section-title" }, [
-    name, el("span", { class: "pill", text: `${entries.length} 指標` }),
-  ]));
+function renderRiskRow(e) {
+  const tpl = $("#tpl-risk-indicator").content.cloneNode(true);
+  const row = tpl.querySelector(".risk-row");
+  const taggings = e.taggings || [];
+  const primary = taggings.find((t) => t.status === "triggered") || taggings[0] || { status: "missing" };
+  const status = primary.status || "missing";
 
-  // Indicator cards
-  if (entries.length) {
-    frag.appendChild(el("div", { class: "subhead", text: "風險指標判定" }));
-    const grid = el("div", { class: "indicators" });
-    for (const e of entries) grid.appendChild(renderIndicator(e));
-    frag.appendChild(grid);
-  } else {
-    frag.appendChild(el("p", { class: "empty-note", text: "本段落無風險指標。" }));
-  }
-
-  // Trend table
-  if (grouped && Object.keys(grouped).length) {
-    frag.appendChild(el("div", { class: "subhead", text: "財報數據（多期比較）" }));
-    frag.appendChild(renderTrendTable(grouped));
-  }
-  return frag;
-}
-
-function renderIndicator(e) {
-  const tpl = $("#tpl-indicator").content.cloneNode(true);
-  const card = tpl.querySelector(".indicator");
-  const anyTriggered = (e.taggings || []).some((t) => t.status === "triggered");
-  if (anyTriggered) card.classList.add("is-triggered");
+  const badge = tpl.querySelector(".status-badge");
+  badge.classList.add("status-badge--" + status);
+  tpl.querySelector(".status-badge__label").textContent = STATUS_TEXT[status] || status;
 
   const displayName = e.indicator_name || e.indicator_code || "(未命名指標)";
-  tpl.querySelector(".indicator__name").textContent = displayName;
-  const codeEl = tpl.querySelector(".indicator__code");
-  // Only show the formula code line when it adds info beyond the title.
-  if (e.indicator_code && e.indicator_code !== displayName) codeEl.textContent = e.indicator_code;
-  else codeEl.remove();
+  tpl.querySelector(".risk-row__name").textContent = displayName;
+  tpl.querySelector(".risk-row__cur").textContent = e.current_display || fmtNum(e.current_value) || "—";
+  tpl.querySelector(".risk-row__prev").textContent = "前期 " + (e.previous_display || fmtNum(e.previous_value) || "—");
 
-  tpl.querySelector(".indicator__num").textContent = e.current_display || fmtNum(e.current_value) || "—";
-  tpl.querySelector(".indicator__label").textContent = e.value_label || "";
-
-  const ops = tpl.querySelector(".indicator__operands");
-  for (const o of e.operands || []) {
-    ops.appendChild(el("span", { class: "operand" }, [
-      el("b", { text: o.name || o.code || "" }),
-      el("span", { class: "op-period", text: o.period_label || "" }),
-      " ", (o.display || fmtNum(o.value) || "—"),
-    ]));
+  const detail = tpl.querySelector(".risk-row__detail");
+  if (status === "triggered" && primary.threshold) {
+    detail.hidden = false;
+    tpl.querySelector(".risk-row__threshold").textContent = "門檻 " + primary.threshold;
+    tpl.querySelector(".risk-row__desc").textContent = primary.description || "";
+  } else {
+    detail.remove();
   }
-  if (!(e.operands || []).length) ops.remove();
-
-  const tags = tpl.querySelector(".indicator__tags");
-  for (const t of e.taggings || []) {
-    const st = t.status || "missing";
-    tags.appendChild(el("div", { class: "tag tag--" + st }, [
-      el("span", { class: "badge badge--" + st, text: STATUS_TEXT[st] || st }),
-      t.threshold ? el("span", { class: "tag__thresh", text: "門檻 " + t.threshold }) : null,
-      t.description ? el("span", { class: "tag__desc", text: t.description }) : null,
-    ]));
-  }
-  if (!(e.taggings || []).length) tags.remove();
-  return card;
+  return row;
 }
 
-function renderTrendTable(grouped) {
-  const wrap = el("div", { class: "table-wrap" });
-  const table = el("table", { class: "trend" });
-  const thead = el("thead");
-  const hrow = el("tr", {}, [
-    el("th", { class: "code", text: "代碼" }),
-    el("th", { class: "name", text: "會計科目" }),
-    el("th", { text: "單位" }),
-    ...PERIOD_COLS.map(([, label]) => el("th", { text: label })),
-  ]);
-  thead.appendChild(hrow);
-  table.appendChild(thead);
-
-  const tbody = el("tbody");
-  for (const [code, row] of Object.entries(grouped)) {
-    const tds = [
-      el("td", { class: "code", text: code }),
-      el("td", { class: "name", text: row.FA_CANME || "" }),
-      el("td", { text: row["單位"] || "" }),
-    ];
-    for (const [key] of PERIOD_COLS) {
-      const v = fmtNum(row[key]);
-      tds.push(el("td", { class: "num" + (v === null ? " na" : "") , text: v === null ? "—" : v }));
-    }
-    tbody.appendChild(el("tr", {}, tds));
-  }
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  return wrap;
+// ── JSON export modal ────────────────────────────────────────
+function openJsonModal() {
+  if (!state.lastResult) return;
+  $("#json-modal-body").textContent = JSON.stringify(state.lastResult, null, 2);
+  $("#json-modal").hidden = false;
 }
 
-function renderGenerated(data) {
-  const block = el("div", { class: "block" });
-  const details = el("details", { class: "disclosure", open: true });
-  details.appendChild(el("summary", { text: "LLM 生成敘述段落" }));
-  const body = el("div", { class: "disclosure__body" });
-
-  const secs = data.narrative_sections || data.risk_sections || {};
-  const source = data.narrative_sections ? "（敘事）" : "（風險）";
-  for (const name of SECTION_ORDER) {
-    const num = SECTION_TO_NUM[name];
-    const txt = (data.narrative_sections && data.narrative_sections[num])
-             || (data.risk_sections && data.risk_sections[num]);
-    if (!txt) continue;
-    body.appendChild(el("div", { class: "narrative-sec" }, [
-      el("h5", { text: `${num} ${name}` }),
-      el("p", { text: txt }),
-    ]));
-  }
-  if (!body.children.length) {
-    // fall back to raw keys if section mapping missed
-    for (const [k, v] of Object.entries(secs)) {
-      body.appendChild(el("div", { class: "narrative-sec" }, [
-        el("h5", { text: k + " " + source }), el("p", { text: String(v) }),
-      ]));
-    }
-  }
-  details.appendChild(body);
-  block.appendChild(details);
-  return block;
+function closeJsonModal() {
+  $("#json-modal").hidden = true;
 }
 
-function renderPrompts(data) {
-  const block = el("div", { class: "block" });
-  const mk = (title, text) => {
-    if (!text) return null;
-    const details = el("details", { class: "disclosure" });
-    details.appendChild(el("summary", { text: title }));
-    const body = el("div", { class: "disclosure__body" });
-    const copy = el("button", { class: "copy-btn", type: "button", text: "複製" });
-    copy.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(text); copy.textContent = "已複製 ✓"; }
-      catch { copy.textContent = "複製失敗"; }
-      setTimeout(() => (copy.textContent = "複製"), 1500);
-    });
-    body.appendChild(copy);
-    body.appendChild(el("pre", { class: "prompt-pre", text }));
-    details.appendChild(body);
-    return details;
-  };
-  const a = mk("敘事 Prompt（narrative_prompt）", data.narrative_prompt);
-  const b = mk("風險 Prompt（risk_prompt）", data.risk_prompt);
-  if (a) block.appendChild(a);
-  if (b) block.appendChild(b);
-  return block.children.length ? block : el("div");
+async function copyJson() {
+  const btn = $("#btn-copy-json");
+  try {
+    await navigator.clipboard.writeText($("#json-modal-body").textContent);
+    btn.textContent = "已複製 ✓";
+  } catch {
+    btn.textContent = "複製失敗";
+  }
+  setTimeout(() => (btn.textContent = "複製"), 1500);
+}
+
+function downloadJson() {
+  if (!state.lastResult) return;
+  const rr = state.lastResult.risk_report || {};
+  const name = state.lastResult.customer_id || rr.customer_id || state.lastResult.request_id || "risk_report";
+  const blob = new Blob([JSON.stringify(state.lastResult, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: `risk_report_${name}.json` });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
