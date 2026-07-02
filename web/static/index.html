@@ -82,19 +82,8 @@
                 </label>
               </div>
               <div class="llm-config" id="llm-config" hidden>
-                <div class="field">
-                  <label for="llm_base_url">Base URL</label>
-                  <input type="text" id="llm_base_url" placeholder="https://api.openai.com/v1" autocomplete="off" />
-                </div>
-                <div class="field">
-                  <label for="llm_model">模型</label>
-                  <input type="text" id="llm_model" placeholder="gpt-4o" autocomplete="off" />
-                </div>
-                <div class="field">
-                  <label for="llm_api_key">API Key</label>
-                  <input type="password" id="llm_api_key" placeholder="sk-…" autocomplete="off" />
-                </div>
-                <p class="hint">金鑰僅於本次請求傳給引擎，不會被儲存或記錄。</p>
+                <p class="hint">敘述段落將使用伺服器端 <code>.env</code> 設定的 LLM 端點（<code>LLM_BASE_URL</code> / <code>LLM_MODEL</code> / <code>LLM_API_KEY</code>），介面不需輸入金鑰。</p>
+                <p class="hint hint--warn" id="llm-env-warning" hidden>伺服器尚未設定 LLM 端點（.env 缺 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL），無法生成敘述段落。</p>
               </div>
               <p class="hint hint--warn" id="health-warning" hidden></p>
             </div>

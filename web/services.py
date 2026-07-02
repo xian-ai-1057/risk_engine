@@ -22,6 +22,7 @@ from typing import Any
 
 # ``web/__init__`` has already put src/ and the repo root on sys.path, so these
 # resolve without an editable install.
+from risk_engine import types
 from risk_engine.api import run_report
 from risk_engine.paths import get_base_dir
 from scripts.main import _resolve_paths  # reuse versioned-file discovery
@@ -32,6 +33,32 @@ logger = logging.getLogger(__name__)
 # System prompts live in inputs/prompt/ (only needed for the LLM toggle).
 _NARRATIVE_SYS_PROMPT = "財報敘事_sys_prompt.txt"
 _RISK_SYS_PROMPT = "財報風險_sys_prompt.txt"
+
+# LLM endpoint config is read from the server environment (``.env`` loaded by
+# ``web/__init__``), never collected from the browser — the UI has no key
+# fields. All three must be set for the generate toggle to work.
+_LLM_ENV_VARS = ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")
+
+
+def llm_env_ready() -> bool:
+    """True iff all LLM_* env vars are set (so /api/health can flag the UI)."""
+    return all(os.environ.get(v, "").strip() for v in _LLM_ENV_VARS)
+
+
+def _read_llm_env() -> tuple[str, str, str]:
+    """Return ``(base_url, api_key, model)`` from env; raise if any missing.
+
+    Raises:
+        types.ConfigError: one or more LLM_* vars unset — the route maps this
+            to HTTP 400 so the browser shows a clear message.
+    """
+    values = {v: os.environ.get(v, "").strip() for v in _LLM_ENV_VARS}
+    missing = [v for v, val in values.items() if not val]
+    if missing:
+        raise types.ConfigError(
+            "啟用 LLM 生成需在伺服器 .env 設定: " + ", ".join(missing),
+        )
+    return values["LLM_BASE_URL"], values["LLM_API_KEY"], values["LLM_MODEL"]
 
 # Fixed HTML order the engine expects.
 HTML_SLOTS = ("財務概況", "財務比率", "現金流量", "淨值調節")
@@ -112,14 +139,15 @@ class AnalyzeInputs:
     report_date: str = ""
     request_id: str = ""
     generate: bool = False
-    llm_base_url: str = ""
-    llm_api_key: str = ""
-    llm_model: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
 
 
 def analyze(inp: AnalyzeInputs) -> dict[str, Any]:
     """Persist uploads, run the engine, and return its result dict.
+
+    When ``inp.generate`` is set the LLM endpoint is read from the server
+    environment (``LLM_BASE_URL`` / ``LLM_API_KEY`` / ``LLM_MODEL``, populated
+    from ``.env``); it is never taken from the request.
 
     Raises:
         FileNotFoundError: server-side resource files are missing.
@@ -149,6 +177,8 @@ def analyze(inp: AnalyzeInputs) -> dict[str, Any]:
             "request_id": inp.request_id,
         }
         if inp.generate:
+            # LLM endpoint comes from server env (.env), not the request.
+            base_url, api_key, model = _read_llm_env()
             kwargs.update(
                 generate=True,
                 narrative_sys_prompt_path=os.path.join(
@@ -157,9 +187,9 @@ def analyze(inp: AnalyzeInputs) -> dict[str, Any]:
                 risk_sys_prompt_path=os.path.join(
                     prompt_dir(), _RISK_SYS_PROMPT,
                 ),
-                llm_base_url=inp.llm_base_url,
-                llm_api_key=inp.llm_api_key,
-                llm_model=inp.llm_model,
+                llm_base_url=base_url,
+                llm_api_key=api_key,
+                llm_model=model,
             )
         return run_report(**kwargs)
     finally:

@@ -21,6 +21,9 @@ class HealthResponse(BaseModel):
     has_xlsx: bool
     has_risk_prompt: bool
     has_narrative_prompt: bool
+    # Whether LLM_BASE_URL/API_KEY/MODEL are all set in the server env (.env),
+    # so the UI can warn before the user enables 生成敘述段落.
+    has_llm_env: bool = False
 
 
 class ErrorResponse(BaseModel):

@@ -53,6 +53,7 @@ def index() -> FileResponse:
 def api_health() -> HealthResponse:
     """Report whether the server-side resource files are present."""
     rdir = services.resource_dir()
+    has_llm_env = services.llm_env_ready()
     try:
         paths = services._resolve_paths(rdir)
         return HealthResponse(
@@ -63,6 +64,7 @@ def api_health() -> HealthResponse:
             has_narrative_prompt=os.path.isfile(
                 paths["narrative_user_prompt"],
             ),
+            has_llm_env=has_llm_env,
         )
     except FileNotFoundError:
         return HealthResponse(
@@ -71,6 +73,7 @@ def api_health() -> HealthResponse:
             has_xlsx=False,
             has_risk_prompt=False,
             has_narrative_prompt=False,
+            has_llm_env=has_llm_env,
         )
 
 
@@ -112,11 +115,13 @@ async def api_analyze(
     customer_id: str = Form(""),
     report_date: str = Form(""),
     generate: bool = Form(False, description="是否呼叫 LLM 生成敘述段落"),
-    llm_base_url: str = Form(""),
-    llm_api_key: str = Form(""),
-    llm_model: str = Form(""),
 ) -> dict:
-    """Run the real engine on the 4 uploaded財報 HTML and return its result."""
+    """Run the real engine on the 4 uploaded財報 HTML and return its result.
+
+    When ``generate`` is set the LLM endpoint is read from the server
+    environment (``LLM_BASE_URL`` / ``LLM_API_KEY`` / ``LLM_MODEL`` via ``.env``)
+    — the browser never sends credentials.
+    """
     request_id = uuid.uuid4().hex[:8]
 
     uploads = [file_overview, file_ratio, file_cashflow, file_equity]
@@ -137,9 +142,6 @@ async def api_analyze(
         report_date=report_date,
         request_id=request_id,
         generate=generate,
-        llm_base_url=llm_base_url,
-        llm_api_key=llm_api_key,
-        llm_model=llm_model,
     )
 
     try:
