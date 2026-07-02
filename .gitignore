@@ -17,3 +17,6 @@ deploy/risk_analysis.exe
 # 本機工具設定
 .claude/
 
+# 本機環境變數（可能含 API Key）；範本見 .env.example
+.env
+

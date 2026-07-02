@@ -64,6 +64,8 @@ a = Analysis(
         "utils.xlsx_to_indicators",
         # xlsx 解析改用純 openpyxl（不再經過 pandas）
         "openpyxl",
+        # .env 讀取（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL 可放 EXE 同層 .env）
+        "dotenv",
     ],
     hookspath=[],
     hooksconfig={},
