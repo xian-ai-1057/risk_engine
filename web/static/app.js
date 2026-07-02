@@ -385,8 +385,10 @@ function switchTab(name) {
 function renderNarrTab(data) {
   const root = $("#tabpanel-narr");
   root.innerHTML = "";
-  const hasNarrative = data.narrative_sections && Object.keys(data.narrative_sections).length;
-  const hasRisk = data.risk_sections && Object.keys(data.risk_sections).length;
+  const narr = data.narrative_sections || {};
+  const risk = data.risk_sections || {};
+  const hasNarrative = Object.keys(narr).length;
+  const hasRisk = Object.keys(risk).length;
 
   if (!hasNarrative && !hasRisk) {
     root.appendChild(el("div", { class: "narr-empty" }, [
@@ -397,21 +399,26 @@ function renderNarrTab(data) {
     return;
   }
 
+  // 整份報告一起呈現：單一文件容器，內部依段落標題分段。每段先敘事、
+  // 後風險，兩者接續成文，不標記來源；個別段落無文字時以 placeholder 提示。
+  const doc = el("div", { class: "narr-doc" });
   for (const name of orderedSections(data)) {
     const num = SECTION_TO_NUM[name] || name;
-    const txt = (data.narrative_sections && data.narrative_sections[num])
-      ?? (data.risk_sections && data.risk_sections[num]);
-    root.appendChild(el("div", { class: "narr-card" }, [
-      el("div", { class: "narr-card__head" }, [
-        el("span", { class: "narr-card__code", text: num }),
-        el("span", { class: "narr-card__title", text: name }),
-        el("span", { class: "narr-card__tag", text: "AI 生成" }),
+    const paras = [];
+    if (narr[num]) paras.push(el("p", { class: "narr-doc__text", text: narr[num] }));
+    if (risk[num]) paras.push(el("p", { class: "narr-doc__text", text: risk[num] }));
+    if (!paras.length) {
+      paras.push(el("p", { class: "narr-doc__text narr-doc__text--placeholder", text: "本段落尚未生成內容。" }));
+    }
+    doc.appendChild(el("section", { class: "narr-doc__section" }, [
+      el("h3", { class: "narr-doc__heading" }, [
+        el("span", { class: "narr-doc__code", text: num }),
+        el("span", { class: "narr-doc__title", text: name }),
       ]),
-      txt
-        ? el("p", { class: "narr-card__text", text: txt })
-        : el("p", { class: "narr-card__text narr-card__text--placeholder", text: "本段落尚未生成內容。" }),
+      ...paras,
     ]));
   }
+  root.appendChild(doc);
 }
 
 function renderDataTab(data) {
