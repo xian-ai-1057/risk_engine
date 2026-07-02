@@ -4,137 +4,178 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>風險分析Demo · 財報風險判斷引擎</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar__brand">
-      <span class="topbar__logo" aria-hidden="true">◈</span>
-      <div>
-        <h1 class="topbar__title">風險分析<span class="topbar__accent">Demo</span></h1>
-        <p class="topbar__subtitle">財報風險判斷引擎 · 徵授信綜合分析</p>
-      </div>
-    </div>
-    <div id="health" class="topbar__health" title="伺服器資源狀態"></div>
-  </header>
-
-  <main class="layout">
-    <!-- ── Input panel ─────────────────────────────────────────── -->
-    <aside class="panel panel--form">
-      <form id="analyze-form" novalidate>
-        <h2 class="panel__heading">分析輸入</h2>
-
-        <fieldset class="field-group">
-          <legend>財報 HTML（四份，順序固定）</legend>
-          <label class="filefield">
-            <span class="filefield__label"><b>①</b> 財務概況</span>
-            <input type="file" name="file_overview" accept=".html,.htm" required />
-          </label>
-          <label class="filefield">
-            <span class="filefield__label"><b>②</b> 財務比率</span>
-            <input type="file" name="file_ratio" accept=".html,.htm" required />
-          </label>
-          <label class="filefield">
-            <span class="filefield__label"><b>③</b> 現金流量</span>
-            <input type="file" name="file_cashflow" accept=".html,.htm" required />
-          </label>
-          <label class="filefield">
-            <span class="filefield__label"><b>④</b> 淨值調節</span>
-            <input type="file" name="file_equity" accept=".html,.htm" required />
-          </label>
-        </fieldset>
-
-        <div class="field">
-          <label for="industry">產業別</label>
-          <select id="industry" name="industry" required>
-            <option value="" disabled selected>載入中…</option>
-          </select>
-        </div>
-
-        <div class="field field--split">
+  <div class="page">
+    <div class="appcard">
+      <header class="appheader">
+        <div class="appheader__brand">
+          <div class="appheader__logo" aria-hidden="true">風</div>
           <div>
-            <label for="customer_id">客戶代號 <span class="muted">(選填)</span></label>
-            <input type="text" id="customer_id" name="customer_id" placeholder="A00001" />
-          </div>
-          <div>
-            <label for="report_date">報告日期 <span class="muted">(選填)</span></label>
-            <input type="text" id="report_date" name="report_date" placeholder="20241231" />
+            <div class="appheader__title">風險分析引擎</div>
+            <div class="appheader__subtitle">7大指標 · 財報風險判定</div>
           </div>
         </div>
-
-        <div class="field">
-          <label class="toggle">
-            <input type="checkbox" id="generate" name="generate" />
-            <span class="toggle__track"><span class="toggle__thumb"></span></span>
-            <span class="toggle__text">呼叫 LLM 生成敘述段落</span>
-          </label>
-        </div>
-
-        <fieldset class="field-group llm-config" id="llm-config" hidden>
-          <legend>LLM 端點設定</legend>
-          <div class="field">
-            <label for="llm_base_url">Base URL</label>
-            <input type="text" id="llm_base_url" name="llm_base_url"
-                   placeholder="https://api.openai.com/v1" autocomplete="off" />
+        <div class="appheader__done" id="header-done" hidden>
+          <div class="appheader__meta">
+            <div>客戶 <span id="hdr-customer">—</span> · <span id="hdr-date">—</span></div>
+            <div class="appheader__meta-sub">request <span id="hdr-request">—</span></div>
           </div>
-          <div class="field">
-            <label for="llm_model">模型</label>
-            <input type="text" id="llm_model" name="llm_model"
-                   placeholder="gpt-4o" autocomplete="off" />
-          </div>
-          <div class="field">
-            <label for="llm_api_key">API Key</label>
-            <input type="password" id="llm_api_key" name="llm_api_key"
-                   placeholder="sk-…" autocomplete="off" />
-          </div>
-          <p class="hint">金鑰僅於本次請求傳給引擎，不會被儲存或記錄。</p>
-        </fieldset>
-
-        <div class="actions">
-          <button type="submit" class="btn btn--primary" id="btn-analyze">開始分析</button>
-          <button type="button" class="btn btn--ghost" id="btn-sample">載入範例</button>
-        </div>
-        <p class="hint" id="form-hint">
-          沒有財報檔？點「載入範例」以內建樣本資料預覽完整介面。
-        </p>
-      </form>
-    </aside>
-
-    <!-- ── Results panel ───────────────────────────────────────── -->
-    <section class="panel panel--results" id="results" aria-live="polite">
-      <div class="empty" id="empty-state">
-        <div class="empty__mark" aria-hidden="true">◫</div>
-        <h2>尚無分析結果</h2>
-        <p>上傳四份財報 HTML 並選擇產業別後按「開始分析」，<br />或直接「載入範例」預覽。</p>
-      </div>
-
-      <div class="loading" id="loading-state" hidden>
-        <div class="spinner" aria-hidden="true"></div>
-        <p id="loading-text">分析中…</p>
-      </div>
-
-      <div class="error-box" id="error-state" hidden></div>
-
-      <div id="report" hidden></div>
-    </section>
-  </main>
-
-  <!-- ── Templates ─────────────────────────────────────────────── -->
-  <template id="tpl-indicator">
-    <article class="indicator">
-      <header class="indicator__head">
-        <div>
-          <h4 class="indicator__name"></h4>
-          <code class="indicator__code"></code>
-        </div>
-        <div class="indicator__value">
-          <span class="indicator__num"></span>
-          <span class="indicator__label"></span>
+          <button type="button" class="btn btn--brand-sm" id="btn-export-json">匯出 JSON</button>
+          <button type="button" class="btn btn--outline-sm" id="btn-reset">重新開始</button>
         </div>
       </header>
-      <div class="indicator__operands"></div>
-      <div class="indicator__tags"></div>
-    </article>
+
+      <div class="error-banner" id="error-banner" hidden></div>
+
+      <!-- ── Upload stage ─────────────────────────────────────── -->
+      <section class="stage" id="stage-upload">
+        <div class="stage__col">
+          <div class="stage-icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+          </div>
+          <h2 class="stage-title">上傳財務報表 HTML</h2>
+          <p class="stage-desc">依序上傳 4 份報表：①財務概況 ②財務比率 ③現金流量 ④淨值調節</p>
+
+          <div class="dropzone">
+            <div class="dropzone__actions">
+              <label class="btn btn--brand filepicker">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                選擇 HTML 檔
+                <input type="file" id="file-picker" multiple accept=".html,.htm" hidden />
+              </label>
+              <button type="button" class="btn btn--outline" id="btn-sample">載入範例財報</button>
+            </div>
+            <div class="filelist" id="filelist"></div>
+            <p class="filelist__empty" id="filelist-empty">尚未選擇檔案</p>
+            <p class="filelist__note" id="filelist-note" hidden></p>
+          </div>
+
+          <details class="adv-settings" id="adv-settings" open>
+            <summary>進階設定</summary>
+            <div class="adv-settings__body">
+              <div class="field">
+                <label for="industry">產業別 <span class="req">*</span></label>
+                <select id="industry" required>
+                  <option value="" disabled selected>載入中…</option>
+                </select>
+              </div>
+              <div class="field field--split">
+                <div>
+                  <label for="customer_id">客戶代號 <span class="muted">(選填)</span></label>
+                  <input type="text" id="customer_id" placeholder="A00001" />
+                </div>
+                <div>
+                  <label for="report_date">報告日期 <span class="muted">(選填)</span></label>
+                  <input type="text" id="report_date" placeholder="20241231" />
+                </div>
+              </div>
+              <div class="field">
+                <label class="toggle">
+                  <input type="checkbox" id="generate" />
+                  <span class="toggle__track"><span class="toggle__thumb"></span></span>
+                  <span class="toggle__text">呼叫 LLM 生成敘述段落</span>
+                </label>
+              </div>
+              <div class="llm-config" id="llm-config" hidden>
+                <div class="field">
+                  <label for="llm_base_url">Base URL</label>
+                  <input type="text" id="llm_base_url" placeholder="https://api.openai.com/v1" autocomplete="off" />
+                </div>
+                <div class="field">
+                  <label for="llm_model">模型</label>
+                  <input type="text" id="llm_model" placeholder="gpt-4o" autocomplete="off" />
+                </div>
+                <div class="field">
+                  <label for="llm_api_key">API Key</label>
+                  <input type="password" id="llm_api_key" placeholder="sk-…" autocomplete="off" />
+                </div>
+                <p class="hint">金鑰僅於本次請求傳給引擎，不會被儲存或記錄。</p>
+              </div>
+              <p class="hint hint--warn" id="health-warning" hidden></p>
+            </div>
+          </details>
+
+          <button type="button" class="btn btn--analyze" id="btn-analyze" disabled>開始分析</button>
+        </div>
+      </section>
+
+      <!-- ── Analyzing stage ──────────────────────────────────── -->
+      <section class="stage" id="stage-analyzing" hidden>
+        <div class="stage__col stage__col--narrow">
+          <div class="spinner" aria-hidden="true"></div>
+          <div class="analyzing-label" id="analyzing-label">讀取財報 HTML…</div>
+          <div class="analyzing-sub">分析中，請稍候…</div>
+          <div class="progressbar"><div class="progressbar__fill" id="progress-fill"></div></div>
+        </div>
+      </section>
+
+      <!-- ── Done stage ───────────────────────────────────────── -->
+      <section class="stage" id="stage-done" hidden>
+        <div class="statgrid">
+          <div class="statcard">
+            <div class="statcard__label">指標總數</div>
+            <div class="statcard__num" id="stat-total">—</div>
+          </div>
+          <div class="statcard">
+            <div class="statcard__label">觸發</div>
+            <div class="statcard__num statcard__num--trig" id="stat-trig">—</div>
+          </div>
+          <div class="statcard">
+            <div class="statcard__label">未觸發</div>
+            <div class="statcard__num statcard__num--not" id="stat-not">—</div>
+          </div>
+          <div class="statcard">
+            <div class="statcard__label">缺資料</div>
+            <div class="statcard__num statcard__num--miss" id="stat-miss">—</div>
+          </div>
+        </div>
+
+        <div class="tabbar" role="tablist">
+          <button class="tab-btn is-active" id="tab-btn-narr" type="button" role="tab" aria-selected="true">生成段落</button>
+          <button class="tab-btn" id="tab-btn-data" type="button" role="tab" aria-selected="false">財報資料</button>
+          <button class="tab-btn" id="tab-btn-risk" type="button" role="tab" aria-selected="false">風險判定</button>
+        </div>
+        <div class="tabpanel" id="tabpanel-narr" role="tabpanel"></div>
+        <div class="tabpanel" id="tabpanel-data" role="tabpanel" hidden></div>
+        <div class="tabpanel" id="tabpanel-risk" role="tabpanel" hidden></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ── JSON export modal ────────────────────────────────────── -->
+  <div class="modal-overlay" id="json-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="最終輸出 JSON">
+      <div class="modal__header">
+        <span>最終輸出 · risk_report.json</span>
+        <div class="modal__actions">
+          <button type="button" id="btn-copy-json">複製</button>
+          <button type="button" id="btn-download-json">下載 .json</button>
+          <button type="button" id="btn-close-json">關閉</button>
+        </div>
+      </div>
+      <pre class="modal__body" id="json-modal-body"></pre>
+    </div>
+  </div>
+
+  <!-- ── Templates ─────────────────────────────────────────────── -->
+  <template id="tpl-risk-indicator">
+    <div class="risk-row">
+      <div class="risk-row__main">
+        <span class="status-badge"><span class="status-badge__dot"></span><span class="status-badge__label"></span></span>
+        <span class="risk-row__name"></span>
+        <span class="risk-row__cur"></span>
+        <span class="risk-row__prev"></span>
+      </div>
+      <div class="risk-row__detail" hidden>
+        <span class="risk-row__threshold"></span>
+        <span class="risk-row__desc"></span>
+      </div>
+    </div>
   </template>
 
   <script src="/static/app.js" defer></script>
