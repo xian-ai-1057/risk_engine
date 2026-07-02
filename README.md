@@ -138,13 +138,15 @@ cp .env.example .env   # 複製範本，依需要填值
 | `RISK_WEB_PORT` | Web Demo 綁定的 port | `8000` |
 | `RISK_WEB_RELOAD` | 是否開啟 uvicorn `--reload`（`1`/`true`/`yes`/`on`） | 關閉 |
 | `RISK_WEB_RESOURCE_DIR` | Web Demo 讀指標 xlsx + 2 份 prompt 模板的目錄 | `<repo>/deploy` |
-| `LLM_BASE_URL` | `--generate` 用的 OpenAI 相容端點 | 無（缺值即報錯） |
+| `LLM_BASE_URL` | 生成敘述段落用的 OpenAI 相容端點 | 無（缺值即報錯） |
 | `LLM_API_KEY` | 同上，API Key | 無（缺值即報錯） |
 | `LLM_MODEL` | 同上，模型名稱 | 無（缺值即報錯） |
 
-`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` 只有 CLI/EXE 的 `--generate`
-會讀；Web Demo 頁面上的 LLM 欄位是逐次由瀏覽器表單傳入的，刻意不落地存
-在伺服器端或讀這三個變數（金鑰只用於單次請求）。
+`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` 由 **CLI/EXE 的 `--generate` 與
+Web Demo 的「呼叫 LLM 生成敘述段落」共用**：兩者都改由伺服器端 `.env`（或環
+境變數）讀取，Web Demo 介面**不再輸入金鑰**。三者需一起設定，缺任一項時
+CLI 回 `CONFIG_ERROR`、Web Demo 回 400 並在畫面提示（`/api/health` 會回報
+`has_llm_env` 供介面預先警示）。
 
 ### 1. EXE 流程（生產用）
 
@@ -245,8 +247,10 @@ python -m web                  # 或：risk-web
 
 - 上傳①財務概況 ②財務比率 ③現金流量 ④淨值調節 4 份 HTML，選產業別，按「開始分析」；
   或按「載入範例財報」直接看 `inputs/json_sample/final_results.json` 的預錄結果。
-- 可勾選「呼叫 LLM 生成敘述段落」，於表單中逐次填入 Base URL / API Key / 模型名稱
-  （金鑰只用於當次請求，伺服器不落地儲存，也不讀 `LLM_*` 環境變數）。
+- 可勾選「呼叫 LLM 生成敘述段落」；LLM 端點一律由伺服器端 `.env` 的
+  `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` 提供，**介面不需輸入金鑰**。
+  若伺服器尚未設定（`/api/health` 的 `has_llm_env` 為 false），介面會提示且
+  不送出生成請求。
 - 結果分「生成段落」/「財報資料」/「風險判定」三個分頁呈現，並可「匯出 JSON」。
 
 伺服器端需要的指標 xlsx + 兩份 user prompt 模板，預設讀 `<repo>/deploy/`

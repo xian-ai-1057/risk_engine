@@ -85,6 +85,8 @@ const state = {
   lastResult: null,
   analyzeTimer: null,
   progressTimer: null,
+  // null = unknown (health not loaded); true/false once /api/health resolves.
+  hasLlmEnv: null,
 };
 
 function setStage(name) {
@@ -117,11 +119,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const gen = $("#generate");
   gen.addEventListener("change", () => {
     $("#llm-config").hidden = !gen.checked;
+    updateLlmWarning();
     updateAnalyzeButtonState();
   });
-  for (const id of ["llm_base_url", "llm_model", "llm_api_key"]) {
-    $("#" + id).addEventListener("input", updateAnalyzeButtonState);
-  }
 
   $("#tab-btn-narr").addEventListener("click", () => switchTab("narr"));
   $("#tab-btn-data").addEventListener("click", () => switchTab("data"));
@@ -143,13 +143,24 @@ async function refreshHealth() {
   try {
     const r = await fetch("/api/health");
     const h = await r.json();
+    state.hasLlmEnv = !!h.has_llm_env;
     const ok = h.status === "ok" && h.has_xlsx;
     warn.hidden = ok;
     if (!ok) warn.textContent = `伺服器資源不完整（${h.status}），分析功能可能無法使用。`;
   } catch {
+    state.hasLlmEnv = null; // unknown — don't block generate, let the server decide
     warn.hidden = false;
     warn.textContent = "無法連線至伺服器。";
   }
+  updateLlmWarning();
+  updateAnalyzeButtonState();
+}
+
+// Show the "server has no LLM endpoint" warning only when the user has enabled
+// 生成敘述段落 and health has definitively reported the env is unset.
+function updateLlmWarning() {
+  const show = $("#generate").checked && state.hasLlmEnv === false;
+  $("#llm-env-warning").hidden = !show;
 }
 
 async function loadIndustries() {
@@ -247,8 +258,9 @@ function updateAnalyzeButtonState() {
   const allFiles = state.slotFiles.every(Boolean);
   const industryOk = !!$("#industry").value;
   const genChecked = $("#generate").checked;
-  const llmOk = !genChecked || ["llm_base_url", "llm_model", "llm_api_key"]
-    .every((id) => $("#" + id).value.trim() !== "");
+  // Credentials come from server .env; only block when health has definitively
+  // reported the LLM env is missing (unknown/null → let the server decide).
+  const llmOk = !genChecked || state.hasLlmEnv !== false;
   $("#btn-analyze").disabled = !(allFiles && industryOk && llmOk);
 }
 
@@ -310,11 +322,7 @@ async function onAnalyzeClick() {
   fd.append("customer_id", $("#customer_id").value);
   fd.append("report_date", $("#report_date").value);
   fd.append("generate", generate ? "true" : "false");
-  if (generate) {
-    fd.append("llm_base_url", $("#llm_base_url").value);
-    fd.append("llm_model", $("#llm_model").value);
-    fd.append("llm_api_key", $("#llm_api_key").value);
-  }
+  // LLM 端點由伺服器 .env 提供，前端不再傳送金鑰。
 
   $("#error-banner").hidden = true;
   setStage("analyzing");

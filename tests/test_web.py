@@ -49,6 +49,34 @@ def test_health(client: TestClient) -> None:
     body = r.json()
     assert body["status"] == "ok"
     assert body["has_xlsx"] is True
+    assert "has_llm_env" in body
+
+
+def test_health_llm_env_reflects_environment(
+    client: TestClient, monkeypatch,
+) -> None:
+    """/api/health.has_llm_env is True only when all LLM_* vars are set."""
+    for var in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL"):
+        monkeypatch.setenv(var, "x")
+    assert client.get("/api/health").json()["has_llm_env"] is True
+
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    assert client.get("/api/health").json()["has_llm_env"] is False
+
+
+def test_analyze_generate_without_llm_env_returns_400(
+    client: TestClient, monkeypatch,
+) -> None:
+    """generate=true but no server LLM_* env → ConfigError mapped to 400."""
+    for var in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    r = client.post(
+        "/api/analyze",
+        files=_dummy_files(),
+        data={"industry": "7大指標", "generate": "true"},
+    )
+    assert r.status_code == 400
+    assert "LLM" in r.json()["detail"]
 
 
 def test_industries(client: TestClient) -> None:
