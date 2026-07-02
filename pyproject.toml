@@ -7,6 +7,11 @@ name = "risk_engine"
 version = "0.1.0"
 description = "財報風險判斷引擎"
 requires-python = ">=3.10"
+dependencies = [
+    # 讓 scripts/main.py（CLI/EXE）與 web/ 都能從 .env 讀取設定，
+    # 不必每次手動 export；純 Python、無 C extension，EXE 體積影響可忽略。
+    "python-dotenv>=1.0",
+]
 
 [project.optional-dependencies]
 # Web 介面（風險分析Demo）。刻意隔離為選用相依：核心引擎與 EXE 打包

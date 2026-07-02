@@ -117,6 +117,35 @@ EXE 流程（``scripts/main.py``）只接受四類檔案，皆放在 EXE 同層�
 
 ## 快速開始
 
+### 環境變數設定（`.env`，選用）
+
+`scripts/main.py`（CLI/EXE）與 `web/`（Web Demo）用到的參數都可以從 `.env`
+讀入，不必每次手動 `export`：
+
+```bash
+cp .env.example .env   # 複製範本，依需要填值
+```
+
+- 兩個入口啟動時都會自動讀取與自己同層的 `.env`（EXE 為執行檔所在目錄；
+  `python -m web` / `risk-web` 為 repo root），未設定的變數維持程式內建預設值。
+- **真正的 shell 環境變數優先於 `.env`**：`.env` 只補上尚未設定的值，方便
+  CI／容器用 `export` 覆寫而不用改檔案。
+- `.env` 已加入 `.gitignore`，不會被提交；範本 `.env.example` 才進版控。
+
+| 變數 | 用途 | 預設值 |
+|------|------|--------|
+| `RISK_WEB_HOST` | Web Demo 綁定的 host | `127.0.0.1` |
+| `RISK_WEB_PORT` | Web Demo 綁定的 port | `8000` |
+| `RISK_WEB_RELOAD` | 是否開啟 uvicorn `--reload`（`1`/`true`/`yes`/`on`） | 關閉 |
+| `RISK_WEB_RESOURCE_DIR` | Web Demo 讀指標 xlsx + 2 份 prompt 模板的目錄 | `<repo>/deploy` |
+| `LLM_BASE_URL` | `--generate` 用的 OpenAI 相容端點 | 無（缺值即報錯） |
+| `LLM_API_KEY` | 同上，API Key | 無（缺值即報錯） |
+| `LLM_MODEL` | 同上，模型名稱 | 無（缺值即報錯） |
+
+`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` 只有 CLI/EXE 的 `--generate`
+會讀；Web Demo 頁面上的 LLM 欄位是逐次由瀏覽器表單傳入的，刻意不落地存
+在伺服器端或讀這三個變數（金鑰只用於單次請求）。
+
 ### 1. EXE 流程（生產用）
 
 ```bash
@@ -141,6 +170,7 @@ echo '{"html_files":["f1.html","f2.html","f3.html","f4.html"],
 | `--xlsx` | 指標 xlsx 路徑；省略時自動探測（版本化 `indicators_config_V*.xlsx` 取最高版 → 不帶版本的 `indicators_config.xlsx` → EXE 同層唯一一份 `*.xlsx`）。 |
 | `--customer` / `--date` | 選填 metadata；填寫後會寫入輸出 `customer_id` / `report_date`。 |
 | `--request-id` | 上游 trace ID；未指定時自動產生 8 字 hex。 |
+| `--generate` | 額外呼叫 LLM 把 `narrative_prompt` / `risk_prompt` 生成實際段落（`narrative_sections` / `risk_sections`）；需設定 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`（見上節「環境變數設定」），缺一即回 `CONFIG_ERROR`。 |
 | `-o` | 輸出 JSON 路徑（預設 `<base_dir>/outputs/result_<request_id>_<ts>.json`）。 |
 | `--stdout` | 把輸出 JSON / 錯誤 JSON 印到 stdout（log 仍走檔案，不混入）。 |
 | `--debug` | 切 DEBUG 級別 log。 |
@@ -197,6 +227,35 @@ Excel 須包含兩個 sheet：
 `scripts/risk_checker.py` 走舊版 JSON-driven 流程（`--config indicators_config.json`
 + `--narrative-filter narrative_filter.json`），保留供開發者快速回歸；EXE 打包
 **不**使用此入口。詳細旗標見該檔 docstring。
+
+### 1.3 Web Demo（開發用瀏覽器介面）
+
+`web/` 是一層薄的 FastAPI 應用，讓使用者不寫 CLI、直接在瀏覽器上傳 4 份財報
+HTML、選產業別、看風險判定結果 —— 內部就是 in-process 呼叫
+`risk_engine.api.run_report()`，不經 EXE、不開子行程。此套件與核心引擎、EXE
+打包完全隔離（見 `build/risk_analysis.spec` 的 excludes），是選用相依。
+
+```bash
+pip install -e ".[web]"        # 安裝 fastapi / uvicorn / python-multipart
+cp .env.example .env           # 選用：設定 RISK_WEB_HOST/PORT/... (見上節)
+python -m web                  # 或：risk-web
+```
+
+啟動後開瀏覽器造訪 `http://127.0.0.1:8000`（或 `.env` 指定的 host/port）：
+
+- 上傳①財務概況 ②財務比率 ③現金流量 ④淨值調節 4 份 HTML，選產業別，按「開始分析」；
+  或按「載入範例財報」直接看 `inputs/json_sample/final_results.json` 的預錄結果。
+- 可勾選「呼叫 LLM 生成敘述段落」，於表單中逐次填入 Base URL / API Key / 模型名稱
+  （金鑰只用於當次請求，伺服器不落地儲存，也不讀 `LLM_*` 環境變數）。
+- 結果分「生成段落」/「財報資料」/「風險判定」三個分頁呈現，並可「匯出 JSON」。
+
+伺服器端需要的指標 xlsx + 兩份 user prompt 模板，預設讀 `<repo>/deploy/`
+（與 EXE 部署目錄同一份），可用 `RISK_WEB_RESOURCE_DIR` 覆寫。啟動前可用
+`GET /api/health` 確認資源檔是否齊全。
+
+```bash
+pytest tests/test_web.py -v    # 路由 / 資料格式測試
+```
 
 ### 2. Python API
 

@@ -21,6 +21,10 @@ log 會印出實際使用的檔名。找不到版本化檔則 fallback 到不帶
   - 寫入 JSON 檔案（預設）
   - --stdout 輸出至標準輸出
 
+``--generate`` 需設定 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 三個環境變數；
+除了用 shell export，也可放在與 EXE（或本檔）同層的 ``.env`` 檔中，啟動時
+會自動讀入（真正的 shell 環境變數優先，``.env`` 只補未設定的值）。
+
 Usage:
     # CLI 模式（最精簡）
     risk_analysis.exe f1.html f2.html f3.html f4.html \\
@@ -48,6 +52,8 @@ import sys
 import uuid
 from typing import Any
 from datetime import datetime
+
+from dotenv import load_dotenv
 
 from risk_engine import log_config, types
 from risk_engine.api import call_llm as _call_llm
@@ -691,6 +697,9 @@ def _usage() -> None:
         "\n"
         "  echo '{...}' | "
         "risk_analysis.exe --stdin [--stdout]\n"
+        "\n"
+        "  # LLM_BASE_URL/LLM_API_KEY/LLM_MODEL 亦可寫在同層 .env 檔內，\n"
+        "  # 啟動時自動讀入（見 .env.example）\n"
     )
 
 
@@ -724,6 +733,9 @@ def _exit_error(
 
 def main() -> None:
     """EXE 主入口。"""
+    # 讀取與 EXE（或本檔）同層的 .env（若存在）；不覆蓋既有 shell 環境變數。
+    load_dotenv(os.path.join(get_base_dir(), ".env"))
+
     # 解析參數
     cli_args = _parse_cli_args(sys.argv)
 
