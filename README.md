@@ -50,11 +50,15 @@ risk_engine/                          # 專案根目錄
 │       ├── xlsx_to_indicators.py     # Excel 指標 → 設定 JSON
 │       └── convert_to_docx.py        # 分析結果 TXT → Word 文件
 ├── tests/                            # pytest 單元測試
-└── data/
-    ├── indicators_config_v3.json     # 範例指標設定（7大指標）
-    ├── tag_table.csv
-    ├── json/                         # 風險結果範例 JSON
-    └── prompt/                       # 敘事 / 風險 sys & user prompt 模板
+├── inputs/
+│   ├── indicators/                   # 指標 xlsx（含 tag_table sheet）
+│   ├── prompt/                       # 敘事 / 風險 sys & user prompt 模板
+│   ├── json_sample/                  # 範例 Report / FullReport JSON
+│   ├── html/                         # 範例財報 HTML
+│   ├── report/                       # 測試案例清單與批次資料
+│   ├── archive/                      # 舊版 indicators_config.json / tag_table.csv
+│   └── version-control/              # 版本控制資料與模板
+└── outputs/                          # 執行時自動產生：log / dist / 結果 JSON / docx ...
 ```
 
 ---
@@ -68,8 +72,8 @@ EXE 流程（``scripts/main.py``）只接受四類檔案，皆放在 EXE 同層�
 | 項目 | 來源 | 必填欄位 / 約束 |
 |------|------|-----------------|
 | 財報 | 4 份 HTML（Big5） | 由 ``utils.html_to_json`` 解析；附帶 ``_period_dates`` metadata。 |
-| 指標 + 敘事 | 一份 xlsx | 必含 `指標` / `敘事指標` 兩個 sheet（找不到時 fallback 為 `Sheet1` / `Sheet2`），由 ``utils.xlsx_to_indicators`` 一次轉成 rules + narrative_filter。預設檔名 `指標.xlsx`，可用 `--xlsx` 指定。 |
-| Prompt 模板 | `risk_user_prompt.txt`、`narrative_user_prompt.txt` | 敘事模板需含 `{{JSON_DATA}}`；風險模板需含 `{{risk_results_1}}`–`{{risk_results_5}}`，可選含 `{{narrative_1}}`–`{{narrative_5}}`。 |
+| 指標 + 敘事 | 一份 xlsx | 必含 `指標` / `敘事指標` 兩個 sheet（找不到時 fallback 為 `Sheet1` / `Sheet2`），由 ``utils.xlsx_to_indicators`` 一次轉成 rules + narrative_filter。預設檔名 `indicators_config.xlsx`，可用 `--xlsx` 指定。亦支援版本化檔名 `indicators_config_V{ver}.xlsx`（如 `indicators_config_V1_1_1.xlsx`），多版並存時自動挑最高版。 |
+| Prompt 模板 | `risk_user_prompt.txt`、`narrative_user_prompt.txt` | 敘事模板需含 `{{JSON_DATA}}`；風險模板需含 `{{risk_results_1}}`–`{{risk_results_5}}`，可選含 `{{narrative_1}}`–`{{narrative_5}}`。兩者皆支援版本化檔名 `{base}_V{ver}.txt`（如 `risk_user_prompt_V1_1_1.txt`），多版並存時自動挑最高版；找不到版本化檔則 fallback 到不帶版本的舊檔名。 |
 | Tag 對照 | `tag_table.csv`（選用） | HTML 解析輔助；缺檔自動退化為 None。 |
 
 底層 Python API / legacy CLI（``scripts/risk_checker.py``）仍可吃 CSV / JSON 財報與
@@ -107,7 +111,7 @@ EXE 流程（``scripts/main.py``）只接受四類檔案，皆放在 EXE 同層�
 
 - Console + 檔案雙輸出，格式 `%(asctime)s [%(levelname)s] %(name)s - %(message)s`。
 - 預設 INFO；CLI `--debug` 切為 DEBUG。
-- 未指定 `--log` 時寫入 `<base_dir>/log/<YYYYMMDD_HHMMSS>[_<request_id>].log`；EXE 環境（`sys.frozen`）的 base_dir 為執行檔目錄。
+- 未指定 `--log` 時寫入 `<base_dir>/outputs/log/<YYYYMMDD_HHMMSS>[_<request_id>].log`；EXE 環境（`sys.frozen`）的 base_dir 為執行檔目錄。
 
 ---
 
@@ -134,21 +138,23 @@ echo '{"html_files":["f1.html","f2.html","f3.html","f4.html"],
 |------|------|
 | 4 個位置參數 | 4 份財報 HTML 路徑（Big5 編碼），順序需符合 `html_to_json` 的工作表配置。 |
 | `--industry` | 產業名稱，必須存在於指標 xlsx 的 `指標` sheet `產業別` 欄。 |
-| `--xlsx` | 指標 xlsx 路徑；省略時自動探測（預設 `指標.xlsx` / `indicator.xlsx` / `indicators.xlsx`，或 EXE 同層唯一一份 `*.xlsx`）。 |
+| `--xlsx` | 指標 xlsx 路徑；省略時自動探測（版本化 `indicators_config_V*.xlsx` 取最高版 → 不帶版本的 `indicators_config.xlsx` → EXE 同層唯一一份 `*.xlsx`）。 |
 | `--customer` / `--date` | 選填 metadata；填寫後會寫入輸出 `customer_id` / `report_date`。 |
 | `--request-id` | 上游 trace ID；未指定時自動產生 8 字 hex。 |
-| `-o` | 輸出 JSON 路徑（預設 `<base_dir>/output/result_<request_id>_<ts>.json`）。 |
+| `-o` | 輸出 JSON 路徑（預設 `<base_dir>/outputs/result_<request_id>_<ts>.json`）。 |
 | `--stdout` | 把輸出 JSON / 錯誤 JSON 印到 stdout（log 仍走檔案，不混入）。 |
 | `--debug` | 切 DEBUG 級別 log。 |
 
-EXE 同層需備齊：xlsx + `risk_user_prompt.txt` + `narrative_user_prompt.txt`，
-（選用）`tag_table.csv`。輸出結構為 `ExeOutput`（含 `schema_version`、
-`narrative_prompt`、`risk_prompt`、`grouped_report`、`risk_report`）。
+EXE 同層需備齊：`indicators_config.xlsx` + `risk_user_prompt.txt`
++ `narrative_user_prompt.txt`（三者均可改用版本化檔名
+`{base}_V{ver}.{ext}`，例如 `risk_user_prompt_V1_1_1.txt`，多版並存自動挑最高版）。
+輸出結構為 `ExeOutput`（含 `schema_version`、`narrative_prompt`、`risk_prompt`、
+`grouped_report`、`risk_report`）。
 
 打包前可先用批次驗證腳本掃過既有測試案例：
 
 ```bash
-python scripts/batch_test.py    # 讀 data/report/新測試案例_json/*.json
+python scripts/batch_test.py    # 讀 inputs/report/新測試案例_json/*.json
 ```
 
 ### 1.1 從 Excel 單獨產出 indicator.json + narrative_filter.json（debug 用）
@@ -158,15 +164,33 @@ EXE 流程裡 xlsx 是直接在記憶體中轉成 rules / filter，不會落地�
 
 ```bash
 python -m utils.xlsx_to_indicators 指標.xlsx \
-    --config-out data/indicator.json \
-    --filter-out data/narrative_filter.json
+    --config-out outputs/indicator.json \
+    --filter-out outputs/narrative_filter.json
 ```
 
 Excel 須包含兩個 sheet：
-- `指標`：欄位同既有 CSV（`產業別` / `財務分析指標` / `指標名稱` / `指標對應財報欄位` / `指標編號` / `指標判斷門檻值` / `風險情境` / `結果單位`）。
-- `敘事指標`：`產業別` / `段落` / `會計科目` / `會計科目代碼`，列出每段落要敘事的會計科目。選填欄位 `計算公式`（或 `公式`）/ `顯示名稱` / `單位` / `替換單位`；其中 `替換單位` 優先於 `單位`，兩者皆留白時退回首個 code 的 `單位`。當公式末端含 `*<operand>` 改變了量綱（例如 `((銀行借款+短期票券+公司債)/權益總額)*權益總額` 結果為 `仟元` 而非 `%`），可在 `替換單位` 直接覆寫顯示單位。
+- `指標`：欄位同既有 CSV（`產業別` / `財務分析指標` / `指標名稱` / `指標對應財報欄位` / `指標編號` / `指標判斷門檻值` / `風險情境` / `結果單位`）。選填欄位 `顯示為絕對值`（見下節「金額顯示」）。
+- `敘事指標`：`產業別` / `段落` / `會計科目` / `會計科目代碼`，列出每段落要敘事的會計科目。選填欄位 `計算公式`（或 `公式`）/ `顯示名稱` / `單位` / `替換單位` / `顯示為絕對值`；其中 `替換單位` 優先於 `單位`，兩者皆留白時退回首個 code 的 `單位`。當公式末端含 `*<operand>` 改變了量綱（例如 `((銀行借款+短期票券+公司債)/權益總額)*權益總額` 結果為 `仟元` 而非 `%`），可在 `替換單位` 直接覆寫顯示單位。
 
 找不到預設 sheet 名時自動 fallback 為 `Sheet1` / `Sheet2`，亦可用 `--indicator-sheet` / `--filter-sheet` 指定。
+
+#### 金額顯示（會計式括號 + `顯示為絕對值`）
+
+金額單位（`仟元` / `元`）依以下規則顯示，與台灣財報慣例對齊：
+
+| 原始值 | `顯示為絕對值` | 輸出 |
+|---|---|---|
+| `0` | 任意 | `NTD 0元` |
+| 正值 | 任意 | `NTD 1,234仟元` |
+| 負值 | 留白 / 否（預設） | `NTD (1,234)仟元`（半形括號包數字本身，幣別與單位留外） |
+| 負值 | 是 / Y / true / 1 | `NTD 1,234仟元`（取絕對值，不加負號、不加括號） |
+
+`顯示為絕對值` 適用於**科目名稱本身已暗示流出方向**的會計科目（例如「發放現金股利」、「利息費用」），避免在顯示時重複帶會計式括號。可同時在「指標」與「敘事指標」兩個 sheet 使用：
+
+- 指標 sheet：套用到 `risk_prompt` 中該指標的 `current_display` / `previous_display`（第 4 章）。
+- 敘事指標 sheet：套用到 `narrative_prompt` 的 `{{JSON_DATA}}` 中該科目的各期數字（第 1/2/3/5 章）。
+
+`%` / `天` / `倍` / `次` 等非金額單位不受此旗標影響，負值仍顯示為 `-12.34%` 之類。公式評估、門檻比較等邏輯層完全不變，只影響顯示層。
 
 ### 1.2 Legacy CLI（debug-only）
 
@@ -182,14 +206,14 @@ from risk_engine.pipeline import ReportPipeline
 from utils.narrative import load_narrative_filter
 
 report = loader.load_report("財報.csv")
-rules  = loader.load_config("data/indicator.json", "7大指標")
+rules  = loader.load_config("outputs/indicator.json", "7大指標")
 narrative_filter = load_narrative_filter(
-    "data/narrative_filter.json", "7大指標",
+    "outputs/narrative_filter.json", "7大指標",
 )
 
-with open("data/prompt/財報敘事_user_prompt.txt", encoding="utf-8") as f:
+with open("inputs/prompt/財報敘事_user_prompt.txt", encoding="utf-8") as f:
     narrative_template = f.read()
-with open("data/prompt/財報風險_user_prompt.txt", encoding="utf-8") as f:
+with open("inputs/prompt/財報風險_user_prompt.txt", encoding="utf-8") as f:
     risk_template = f.read()
 
 pipe = ReportPipeline(
@@ -270,25 +294,33 @@ CSV 載入時必須具備 `FA_RFNBR` 欄位；JSON 結構直接以代碼為 key�
 }
 ```
 
+選填欄位 `display_absolute`（由 xlsx「指標」sheet 的「顯示為絕對值」欄位驅動）：值為 `true` 時，該指標的金額顯示永遠取絕對值（不加負號、不加括號）；留空或 `false` 時走預設規則（負值套半形會計式括號）。詳見上節「金額顯示」。
+
 ### 敘事過濾（Narrative Filter）
 
-以產業為第一層 key、段落為次層 key，列出該段落要進入 narrative LLM 的會計科目代碼：
+以產業為第一層 key、段落為次層 key，列出該段落要進入 narrative LLM 的會計科目（或自訂表達式）：
 
 ```json
 {
   "7大指標": {
     "財務結構": [
-      {"code": "TIBA009", "name": "非流動資產"},
-      {"code": "TIBA040", "name": "權益總額"}
+      {"key": "TIBA009", "display_name": "非流動資產",
+       "expression": "TIBA009", "unit": "仟元"},
+      {"key": "TIBA040", "display_name": "權益總額",
+       "expression": "TIBA040", "unit": "仟元"}
     ],
     "現金流量": [
-      {"code": "TIBC014", "name": "營業活動之淨現金流入(流出)"}
+      {"key": "TIBC027", "display_name": "發放現金股利",
+       "expression": "TIBC027", "unit": "仟元",
+       "display_absolute": true}
     ]
   }
 }
 ```
 
-`build_grouped_narrative` 依此過濾從財報中撈出對應的科目，輸出 `{section: {code: ReportRow}}` 結構（與風險判定完全獨立）。段落名稱必須屬於 `財務結構` / `償債能力` / `經營效能` / `獲利能力` / `現金流量` 五者之一，否則 prompt placeholder 對不上。
+每筆 entry 必含 `key` / `display_name` / `expression` / `unit` 四個欄位（由 xlsx「敘事指標」sheet 生成；留白時依 fallback 規則填入）。選填 `display_absolute`：值為 `true` 時，該科目的各期金額顯示永遠取絕對值（不加負號、不加括號），對應 xlsx 的「顯示為絕對值」欄位。
+
+`build_grouped_narrative` 依此過濾從財報中撈出對應的科目，輸出 `{section: {key: ReportRow}}` 結構（與風險判定完全獨立）。段落名稱必須屬於 `財務結構` / `償債能力` / `經營效能` / `獲利能力` / `現金流量` 五者之一，否則 prompt placeholder 對不上。
 
 ### 公式語法
 
@@ -365,8 +397,8 @@ CSV 載入時必須具備 `FA_RFNBR` 欄位；JSON 結構直接以代碼為 key�
 
 | 範本 | 來源 | 用途 |
 |------|------|------|
-| [`data/json/risk_sample.json`](data/json/risk_sample.json) | `report.generate_report` 完整 `FullReport` | debug、CLI `-o` 輸出、`--compact` 進一步精簡 |
-| [`data/json/risk_prompt_input_sample.json`](data/json/risk_prompt_input_sample.json) | `report.to_prompt_view` 投影後其中一個段落 | 填入 `{{risk_results_1..5}}` 給 LLM |
+| [`inputs/json_sample/risk_sample.json`](inputs/json_sample/risk_sample.json) | `report.generate_report` 完整 `FullReport` | debug、CLI `-o` 輸出、`--compact` 進一步精簡 |
+| [`inputs/json_sample/risk_prompt_input_sample.json`](inputs/json_sample/risk_prompt_input_sample.json) | `report.to_prompt_view` 投影後其中一個段落 | 填入 `{{risk_results_1..5}}` 給 LLM |
 
 **IndicatorEntry 層級**
 
@@ -575,12 +607,12 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    R["float (raw)"] --> UF["UNIT_FORMATTERS[unit]"]
-    UF -->|仟元| F1["convert_thousand_ntd<br/>NTD 924,470仟元"]
-    UF -->|%| F2["format_percent<br/>12.93%"]
-    UF -->|天| F3["format_days<br/>85.44天"]
-    UF -->|倍| F4["format_times<br/>0.55倍"]
-    RR["ReportRow<br/>(Current / Period_2 / Period_3)"] -->|"convert_grouped_report(period_dates)"| GR["{section: {code: {<br/>FA_CANME, 趨勢,<br/>'MM/DD/YYYY': '顯示值'}}}"]
+    R["float (raw)"] --> FWU["format_with_unit(value, unit,<br/>display_absolute=False)"]
+    FWU -->|仟元| F1["convert_thousand_ntd<br/>正值: NTD 924,470仟元<br/>負值: NTD (1,234)仟元<br/>display_absolute=True: NTD 1,234仟元"]
+    FWU -->|%| F2["format_percent<br/>12.93%"]
+    FWU -->|天| F3["format_days<br/>85.44天"]
+    FWU -->|倍| F4["format_times<br/>0.55倍"]
+    RR["ReportRow<br/>(Current / Period_2 / Period_3,<br/>display_absolute?)"] -->|"convert_grouped_report(period_dates)"| GR["{section: {code: {<br/>FA_CANME, 趨勢,<br/>'MM/DD/YYYY': '顯示值'}}}"]
     GR --> T["_calc_trend<br/>±5% 為 up/down，否則 flat<br/>組合為『逐期上升 / 大致持平 /<br/>呈先升後降走勢』"]
 ```
 
@@ -590,6 +622,7 @@ flowchart LR
 - **不可變代碼集**：`extract_codes` 永遠回傳去重且保留出現順序的基礎代碼（`_PRV` / `_PRV2` 已剝除）。
 - **OR 優先解析**：`_build_tree` 與 `_parse_compound` 皆先 `OR` 後 `AND`，與 SQL/Python 慣例反向；撰寫設定時請以括號明確化。
 - **Prompt 視圖剝離原始值**：`to_prompt_view` 只保留 `display`，避免把原始代碼或浮點數送進 LLM。
+- **金額會計式括號**：金額單位（`仟元` / `元`）的負值預設以半形括號顯示為 `NTD (1,234)仟元`；指標 / 敘事項目可標 `display_absolute=true` 改成永遠顯示絕對值（科目名稱已表達流出方向時用）。`%` / `天` / `倍` / `次` 不受影響。
 
 ---
 
@@ -646,3 +679,23 @@ _HANDLERS["my_compare"] = _check_my_compare
 ## Logging
 
 `risk_engine.log_config.setup_logging()` 統一設定 root logger，同時輸出至 console 與檔案；未指定路徑時預設寫入程式所在目錄的 `log/<timestamp>_<request_id>.log`，相容 PyInstaller 打包後的 EXE 環境。
+
+---
+
+## 文件導覽
+
+新人想快速上手，建議從 [`docs/`](docs/) 開始（本檔仍是權威 spec，docs/ 是按閱讀路徑重新組織的導讀）。
+
+| 文件 | 用途 |
+|------|------|
+| [docs/README.md](docs/README.md) | 文件索引 + 30 分鐘上手路徑 |
+| [docs/01_overview.md](docs/01_overview.md) | 系統定位、輸入輸出範例、適用場景 |
+| [docs/02_quickstart.md](docs/02_quickstart.md) | 安裝 → pytest → legacy CLI → 看懂結果 |
+| [docs/03_architecture.md](docs/03_architecture.md) | 雙分支 Pipeline 為什麼這樣設計 |
+| [docs/04_spec.md](docs/04_spec.md) | 條列式規格摘要（連回本檔對應章節） |
+| [docs/05_function_flow.md](docs/05_function_flow.md) | EXE / Pipeline / Legacy 三條呼叫路徑 |
+| [docs/06_data_flow.md](docs/06_data_flow.md) | 型別轉換鏈 + 三值缺值傳播實例 |
+| [docs/07_module_reference.md](docs/07_module_reference.md) | 各模組公開函式與職責速查 |
+| [docs/08_config_authoring.md](docs/08_config_authoring.md) | xlsx 指標 / 中文門檻 / 公式語法撰寫指南 |
+| [docs/09_extending.md](docs/09_extending.md) | 新增比較類型、門檻格式、段落、meta-rule |
+| [docs/10_testing_and_debugging.md](docs/10_testing_and_debugging.md) | pytest 速查、log 解讀、常見錯誤對應 |

@@ -33,7 +33,7 @@ from risk_engine import types
 logger = logging.getLogger(__name__)
 
 
-# 容許的段落（與 combine_prompt.NARRATIVE_MAPPING 對齊）
+# 容許的段落
 _KNOWN_SECTIONS = {
     "財務結構", "償債能力", "經營效能",
     "獲利能力", "現金流量",
@@ -269,13 +269,20 @@ def build_grouped_narrative(
             expression = item["expression"]
             display_name = item.get("display_name", "")
             unit = item.get("unit", "")
+            display_absolute = bool(
+                item.get("display_absolute", False),
+            )
 
-            # 表達式三期分別計算
+            # 表達式三期分別計算（同時記錄 reason 供下游分流
+            # 「資料缺失」(missing) vs「無法計算」(undefined/error)）
             values: dict[str, float | None] = {}
+            reasons: dict[str, str] = {}
             for period in _PERIODS:
-                values[period] = formula_mod.evaluate_formula(
+                val, reason = formula_mod.evaluate_formula_detailed(
                     expression, report, period,
                 )
+                values[period] = val
+                reasons[period] = reason
 
             # display_name / unit fallback 至首個 code
             if not display_name or not unit:
@@ -296,13 +303,20 @@ def build_grouped_narrative(
                         expression, section, key,
                     )
 
-            sec_data[key] = {
+            row: types.ReportRow = {
                 "FA_CANME": display_name,
                 "單位": unit,
                 "Current": values["Current"],
                 "Period_2": values["Period_2"],
                 "Period_3": values["Period_3"],
+                "reasons": reasons,
             }
+            if display_absolute:
+                row["display_absolute"] = True
+            parent_key = item.get("parent_key")
+            if parent_key:
+                row["parent_key"] = parent_key
+            sec_data[key] = row
         grouped[section] = sec_data
 
     total = sum(len(v) for v in grouped.values())
@@ -323,7 +337,7 @@ def build_narrative(
 
     內部以 build_grouped_narrative 為單一來源，
     再展平成 {section: [NarrativeItem, ...]}，
-    供 combine_prompt.format_narrative_text 使用。
+    供 format_narrative_text 等下游格式化函式使用。
 
     Args:
         report: 財報資料。

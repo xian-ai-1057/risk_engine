@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>風險分析Demo · 財報風險判斷引擎</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__brand">
+      <span class="topbar__logo" aria-hidden="true">◈</span>
+      <div>
+        <h1 class="topbar__title">風險分析<span class="topbar__accent">Demo</span></h1>
+        <p class="topbar__subtitle">財報風險判斷引擎 · 徵授信綜合分析</p>
+      </div>
+    </div>
+    <div id="health" class="topbar__health" title="伺服器資源狀態"></div>
+  </header>
+
+  <main class="layout">
+    <!-- ── Input panel ─────────────────────────────────────────── -->
+    <aside class="panel panel--form">
+      <form id="analyze-form" novalidate>
+        <h2 class="panel__heading">分析輸入</h2>
+
+        <fieldset class="field-group">
+          <legend>財報 HTML（四份，順序固定）</legend>
+          <label class="filefield">
+            <span class="filefield__label"><b>①</b> 財務概況</span>
+            <input type="file" name="file_overview" accept=".html,.htm" required />
+          </label>
+          <label class="filefield">
+            <span class="filefield__label"><b>②</b> 財務比率</span>
+            <input type="file" name="file_ratio" accept=".html,.htm" required />
+          </label>
+          <label class="filefield">
+            <span class="filefield__label"><b>③</b> 現金流量</span>
+            <input type="file" name="file_cashflow" accept=".html,.htm" required />
+          </label>
+          <label class="filefield">
+            <span class="filefield__label"><b>④</b> 淨值調節</span>
+            <input type="file" name="file_equity" accept=".html,.htm" required />
+          </label>
+        </fieldset>
+
+        <div class="field">
+          <label for="industry">產業別</label>
+          <select id="industry" name="industry" required>
+            <option value="" disabled selected>載入中…</option>
+          </select>
+        </div>
+
+        <div class="field field--split">
+          <div>
+            <label for="customer_id">客戶代號 <span class="muted">(選填)</span></label>
+            <input type="text" id="customer_id" name="customer_id" placeholder="A00001" />
+          </div>
+          <div>
+            <label for="report_date">報告日期 <span class="muted">(選填)</span></label>
+            <input type="text" id="report_date" name="report_date" placeholder="20241231" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="toggle">
+            <input type="checkbox" id="generate" name="generate" />
+            <span class="toggle__track"><span class="toggle__thumb"></span></span>
+            <span class="toggle__text">呼叫 LLM 生成敘述段落</span>
+          </label>
+        </div>
+
+        <fieldset class="field-group llm-config" id="llm-config" hidden>
+          <legend>LLM 端點設定</legend>
+          <div class="field">
+            <label for="llm_base_url">Base URL</label>
+            <input type="text" id="llm_base_url" name="llm_base_url"
+                   placeholder="https://api.openai.com/v1" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="llm_model">模型</label>
+            <input type="text" id="llm_model" name="llm_model"
+                   placeholder="gpt-4o" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="llm_api_key">API Key</label>
+            <input type="password" id="llm_api_key" name="llm_api_key"
+                   placeholder="sk-…" autocomplete="off" />
+          </div>
+          <p class="hint">金鑰僅於本次請求傳給引擎，不會被儲存或記錄。</p>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn btn--primary" id="btn-analyze">開始分析</button>
+          <button type="button" class="btn btn--ghost" id="btn-sample">載入範例</button>
+        </div>
+        <p class="hint" id="form-hint">
+          沒有財報檔？點「載入範例」以內建樣本資料預覽完整介面。
+        </p>
+      </form>
+    </aside>
+
+    <!-- ── Results panel ───────────────────────────────────────── -->
+    <section class="panel panel--results" id="results" aria-live="polite">
+      <div class="empty" id="empty-state">
+        <div class="empty__mark" aria-hidden="true">◫</div>
+        <h2>尚無分析結果</h2>
+        <p>上傳四份財報 HTML 並選擇產業別後按「開始分析」，<br />或直接「載入範例」預覽。</p>
+      </div>
+
+      <div class="loading" id="loading-state" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="loading-text">分析中…</p>
+      </div>
+
+      <div class="error-box" id="error-state" hidden></div>
+
+      <div id="report" hidden></div>
+    </section>
+  </main>
+
+  <!-- ── Templates ─────────────────────────────────────────────── -->
+  <template id="tpl-indicator">
+    <article class="indicator">
+      <header class="indicator__head">
+        <div>
+          <h4 class="indicator__name"></h4>
+          <code class="indicator__code"></code>
+        </div>
+        <div class="indicator__value">
+          <span class="indicator__num"></span>
+          <span class="indicator__label"></span>
+        </div>
+      </header>
+      <div class="indicator__operands"></div>
+      <div class="indicator__tags"></div>
+    </article>
+  </template>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

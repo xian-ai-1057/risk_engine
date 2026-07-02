@@ -1,7 +1,7 @@
 """財務數據預處理模組。
 
 將原始財務 JSON 預處理為 LLM 可直接引用的扁平格式，
-包含顯示值與趨勢判斷，讓模型完全不需要做任何數學運算。
+數值依單位（仟元/%/天/倍）轉為顯示字串，模型只需原樣引用。
 
 使用方式：
     import json
@@ -16,59 +16,96 @@
         json.dump(result, f, ensure_ascii=False, indent=2)
 """
 
+import logging
 from copy import deepcopy
+
+logger = logging.getLogger(__name__)
 
 
 # ── 金額換算 ──────────────────────────────────────
 
 
-def convert_thousand_ntd(value: float) -> str:
+def convert_thousand_ntd(
+    value: float,
+    display_absolute: bool = False,
+) -> str:
     """將仟元數值換算為顯示格式字串。
 
     Args:
         value: 原始數值（單位：仟元）。
+        display_absolute: True 時永遠以絕對值顯示（不加負號、不加括號）。
+            供「發放現金股利」等科目名稱已表達流出方向的指標使用，避免在
+            顯示時重複帶會計式括號。
 
     Returns:
-        格式化後的金額字串，如 "NTD 15.95億元"。
+        格式化後的金額字串。
 
     規則：
-        >= 10,000    → 億元（÷ 100,000，兩位小數）
-        >= 1         → 仟元（原值，千分位逗號）
-        > 0 且 < 1   → 元（× 1,000，取整）
-        0            → "NTD 0元"
+        0                       → "NTD 0元"
+        > 0                     → "NTD 1,234仟元"
+        < 0 且非 display_absolute → "NTD (1,234)仟元"（會計式括號）
+        < 0 且 display_absolute  → "NTD 1,234仟元"
+        |value| < 1 時改用 "元" 為單位（× 1,000 取整）
     """
     if value == 0:
         return "NTD 0元"
 
-    sign = "-" if value < 0 else ""
+    wrap_parens = value < 0 and not display_absolute
     abs_val = abs(value)
 
-    # if abs_val >= 10_000:
-    #     converted = abs_val / 100_000
-    #     return f"{sign}NTD {converted:,.2f}億元"
     if abs_val >= 1:
-        return f"{sign}NTD {abs_val:,.0f}仟元"
+        num_str = f"{abs_val:,.0f}"
+        unit = "仟元"
     else:
-        converted = round(abs_val * 1_000)
-        return f"{sign}NTD {converted:,}元"
+        num_str = f"{round(abs_val * 1_000):,}"
+        unit = "元"
+
+    if wrap_parens:
+        return f"NTD ({num_str}){unit}"
+    return f"NTD {num_str}{unit}"
 
 
 # ── 比率/天數/倍數格式化 ─────────────────────────
 
 
-def format_percent(value: float) -> str:
-    """將小數轉為百分比字串。0.1293 → '12.93%'。"""
-    return f"{value:.2f}%"
+def format_percent(
+    value: float, display_absolute: bool = False,
+) -> str:
+    """將小數轉為百分比字串。負值以會計式括號表示。"""
+    num = f"{abs(value):.2f}"
+    if value < 0 and not display_absolute:
+        return f"({num})%"
+    return f"{num}%"
 
 
-def format_days(value: float) -> str:
-    """格式化天數。保留兩位小數。"""
-    return f"{value:.2f}天"
+def format_days(
+    value: float, display_absolute: bool = False,
+) -> str:
+    """格式化天數。負值以會計式括號表示。"""
+    num = f"{abs(value):.2f}"
+    if value < 0 and not display_absolute:
+        return f"({num})天"
+    return f"{num}天"
 
 
-def format_times(value: float) -> str:
-    """格式化倍數。保留兩位小數。"""
-    return f"{value:.2f}倍"
+def format_times(
+    value: float, display_absolute: bool = False,
+) -> str:
+    """格式化倍數。負值以會計式括號表示。"""
+    num = f"{abs(value):.2f}"
+    if value < 0 and not display_absolute:
+        return f"({num})倍"
+    return f"{num}倍"
+
+
+def format_freq(
+    value: float, display_absolute: bool = False,
+) -> str:
+    """格式化次數。負值以會計式括號表示。"""
+    num = f"{abs(value):.2f}"
+    if value < 0 and not display_absolute:
+        return f"({num})次"
+    return f"{num}次"
 
 
 UNIT_FORMATTERS = {
@@ -76,57 +113,25 @@ UNIT_FORMATTERS = {
     "%": format_percent,
     "天": format_days,
     "倍": format_times,
+    "次": format_freq,
 }
 
 
-# ── 趨勢判斷 ─────────────────────────────────────
+def format_with_unit(
+    value: float,
+    unit: str,
+    *,
+    display_absolute: bool = False,
+) -> str | None:
+    """依單位字串選對應 formatter，統一傳遞 display_absolute。
 
-
-def _calc_trend(values: list[float]) -> str:
-    """根據數值序列（由舊至新）判斷趨勢。
-
-    Args:
-        values: 至少 2 個數值的序列，由舊到新排列。
-
-    Returns:
-        趨勢描述字串。
+    所有 formatter 均支援 ``display_absolute``：負值加括號；
+    旗標為 ``True`` 時取絕對值、不加括號。
     """
-    if len(values) < 2:
-        return ""
-
-    changes = []
-    for i in range(1, len(values)):
-        prev = values[i - 1]
-        curr = values[i]
-        if prev == 0:
-            changes.append("up" if curr > 0 else "flat")
-            continue
-        pct = (curr - prev) / abs(prev)
-        if pct > 0.05:
-            changes.append("up")
-        elif pct < -0.05:
-            changes.append("down")
-        else:
-            changes.append("flat")
-
-    unique = set(changes)
-
-    if unique == {"flat"}:
-        return "大致持平"
-    if unique == {"up"}:
-        return "逐期上升" if len(values) > 2 else "上升"
-    if unique == {"down"}:
-        return "逐期下降" if len(values) > 2 else "下降"
-
-    direction_map = {"up": "升", "down": "降", "flat": "平"}
-    parts = [direction_map[c] for c in changes]
-
-    simplified = [parts[0]]
-    for p in parts[1:]:
-        if p != simplified[-1]:
-            simplified.append(p)
-
-    return f"呈先{'後'.join(simplified)}走勢"
+    formatter = UNIT_FORMATTERS.get(unit)
+    if formatter is None:
+        return None
+    return formatter(value, display_absolute=display_absolute)
 
 
 # ── 日期排序輔助 ──────────────────────────────────
@@ -174,10 +179,7 @@ def _process_indicators(indicators: dict) -> dict:
         if not date_keys:
             continue
 
-        raw_values = [indicator[dk] for dk in date_keys]
-
         new_indicator = {"FA_CANME": indicator["FA_CANME"]}
-        new_indicator["趨勢"] = _calc_trend(raw_values)
 
         if formatter:
             for dk in date_keys:
@@ -204,8 +206,7 @@ def preprocess(data: dict) -> dict:
         data: 原始財務 JSON。
 
     Returns:
-        轉換後的 JSON，日期值為格式化顯示字串，
-        含預計算的「趨勢」欄位。
+        轉換後的 JSON，日期值為格式化顯示字串。
     """
     first_value = next(iter(data.values()), None)
 
@@ -231,6 +232,18 @@ def preprocess(data: dict) -> dict:
 # ReportRow 中固定 key 與期間日期的對應順序
 _PERIOD_KEYS = ("Current", "Period_2", "Period_3")
 
+# 缺值與運算未定義時的顯示字串，讓 LLM 可在敘述中精確指出
+# 「資料缺失」(原始資料未提供) 與「無法計算」(運算結果未定義，
+# 例如分母為零) 兩種情境的差異。
+_MISSING_DISPLAY = "資料缺失"
+_UNDEFINED_DISPLAY = "無法計算"
+
+_REASON_TO_DISPLAY = {
+    "missing": _MISSING_DISPLAY,
+    "undefined": _UNDEFINED_DISPLAY,
+    "error": _UNDEFINED_DISPLAY,
+}
+
 
 def convert_grouped_report(
     grouped_report: dict,
@@ -239,20 +252,25 @@ def convert_grouped_report(
     """將 GroupedReport 轉為 LLM 可讀的格式化結構。
 
     將 Current/Period_2/Period_3 映射為實際日期 key，
-    數值格式化為含單位的顯示字串，並計算趨勢。
+    數值格式化為含單位的顯示字串。若 row 帶有
+    ``parent_key`` 且同段落內存在對應父項，則該 row 會被
+    nest 到父項的 ``sub_items`` 子 dict 下（讓 LLM 用
+    「，其中…」句型自然串接）；找不到父項時退化為平項並
+    記 warning。
 
     Args:
         grouped_report: pipeline 輸出的分群報表，
             結構為 {section: {code: ReportRow}}。
             ReportRow 含 FA_CANME、單位、
-            Current、Period_2、Period_3。
+            Current、Period_2、Period_3、選填 parent_key。
         period_dates: 期間日期列表，順序對應
             Current/Period_2/Period_3，
             如 ["03/31/2025", "12/31/2024", "12/31/2023"]。
 
     Returns:
         轉換後的 dict，結構為
-        {section: {code: {FA_CANME, 趨勢, date: "顯示值"}}}。
+        {section: {code: {FA_CANME, date: "顯示值",
+        [sub_items: {code: {...}}]}}}。
     """
     result = {}
 
@@ -260,7 +278,9 @@ def convert_grouped_report(
         if not isinstance(section, dict):
             continue
 
-        converted = {}
+        # 第一輪：把每個 row 轉成顯示用 new_row（不分父子）
+        converted: dict[str, dict] = {}
+        parent_of: dict[str, str] = {}
         for code, row in section.items():
             if not isinstance(row, dict):
                 continue
@@ -268,46 +288,84 @@ def convert_grouped_report(
                 continue
 
             unit = row.get("單位", "")
-            formatter = UNIT_FORMATTERS.get(unit)
+            reasons = row.get("reasons", {}) or {}
+            display_absolute = bool(
+                row.get("display_absolute", False),
+            )
 
-            # 收集有值的期間（由舊至新排列，供趨勢計算）
-            dated_values: list[
-                tuple[str, float]
-            ] = []
+            # 收集各期間的「日期 + 顯示值」配對。
+            # 有值 → formatter；無值 → 依 reasons[期] 分流為
+            # 「資料缺失」/「無法計算」（無 reasons 時 fallback 為「資料缺失」）。
+            dated_displays: list[tuple[str, str]] = []
             for i, pkey in enumerate(_PERIOD_KEYS):
+                if i >= len(period_dates):
+                    continue
+                date_str = period_dates[i]
                 val = row.get(pkey)
-                if val is not None and i < len(period_dates):
-                    dated_values.append(
-                        (period_dates[i], val)
+                if val is not None:
+                    formatted = format_with_unit(
+                        val, unit,
+                        display_absolute=display_absolute,
                     )
+                    display = (
+                        formatted if formatted is not None
+                        else str(val)
+                    )
+                else:
+                    reason = reasons.get(pkey, "missing")
+                    display = _REASON_TO_DISPLAY.get(
+                        reason, _MISSING_DISPLAY,
+                    )
+                dated_displays.append((date_str, display))
 
-            if not dated_values:
-                continue
-
-            # 由舊至新排序（用 _date_sort_key）
-            dated_values.sort(
+            # 由舊至新排序
+            dated_displays.sort(
                 key=lambda x: _date_sort_key(x[0]),
             )
 
             new_row: dict = {
                 "FA_CANME": row["FA_CANME"],
             }
-
-            # 計算趨勢（由舊至新）
-            raw_values = [v for _, v in dated_values]
-            new_row["趨勢"] = _calc_trend(raw_values)
-
-            # 格式化各期間數值
-            for date_str, val in dated_values:
-                if formatter:
-                    new_row[date_str] = formatter(val)
-                else:
-                    new_row[date_str] = str(val)
+            for date_str, display in dated_displays:
+                new_row[date_str] = display
 
             converted[code] = new_row
+            parent_key = row.get("parent_key")
+            if parent_key:
+                parent_of[code] = parent_key
 
-        if converted:
-            result[section_name] = converted
+        if not converted:
+            continue
+
+        # 第二輪：把子項 nest 到父項的 sub_items 下；找不到
+        # 父項則退化為平項（不丟資料）
+        nested: dict[str, dict] = {}
+        for code, new_row in converted.items():
+            parent_key = parent_of.get(code)
+            if parent_key is None:
+                nested[code] = new_row
+                continue
+            parent_row = converted.get(parent_key)
+            if parent_row is None or parent_key == code:
+                logger.warning(
+                    "段落 '%s' 中 code '%s' 指向父項 '%s'，"
+                    "但該段落內找不到父項；退化為平項",
+                    section_name, code, parent_key,
+                )
+                nested[code] = new_row
+                continue
+            parent_row.setdefault("sub_items", {})[code] = new_row
+
+        # 移除「只剩 sub_items 但沒被當作頂層出現」的父項（不應發生，
+        # 因為父項自身在第一輪也加進 converted 了）。這裡僅保留出現
+        # 順序：先父項、子項已 nest 進去。
+        ordered: dict[str, dict] = {}
+        for code in converted.keys():
+            if code in nested:
+                ordered[code] = nested[code]
+
+        if ordered:
+            result[section_name] = ordered
 
     return result
 
@@ -318,18 +376,14 @@ if __name__ == "__main__":
     report_type = ["單一", "合併"]
     
     for item in report_type:
-        with open(f"DATA/JSON/財報({item})__美達工業_group.json", "r", encoding="utf-8") as f:
+        with open(f"inputs/json_sample/財報({item})__美達工業_group.json", "r", encoding="utf-8") as f:
             raw = json.load(f)
 
         result = preprocess(raw)
-
-        # JSON results
-        with open(f"DATA/JSON/財報({item})__美達工業.txt", "w", encoding="utf-8") as f:
-            json.dumps(result, ensure_ascii=False, indent=4)
 
         # For API
         formatted = json.dumps(result, ensure_ascii=False, indent=4)
         escaped = json.dumps(formatted, ensure_ascii=False)
 
-        with open(f"DATA/JSON/財報({item})__美達工業.txt", "w", encoding="utf-8") as f:
+        with open(f"outputs/json/財報({item})__美達工業.txt", "w", encoding="utf-8") as f:
             f.write(escaped)

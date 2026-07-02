@@ -20,13 +20,23 @@ class ReportLoadError(Exception):
 # ── 財報資料 ────────────────────────────────────────
 
 class ReportRow(TypedDict, total=False):
-    """單一財報代碼的多期數值。"""
+    """單一財報代碼的多期數值。
+
+    ``reasons`` 為敘事分支於 ``build_grouped_narrative`` 計算公式時
+    記錄的各期 ``(value, reason)`` 中的 reason 部分，
+    供下游 (例如 ``simple_convert.convert_grouped_report``) 區分
+    「資料缺失」(missing) 與「無法計算」(undefined / error)。
+    原始財報 row 不會帶 ``reasons``。
+    """
 
     FA_CANME: str
     單位: str
     Current: float | None
     Period_2: float | None
     Period_3: float | None
+    reasons: dict[str, str]
+    display_absolute: bool
+    parent_key: str
 
 
 Report = dict[str, ReportRow]
@@ -72,6 +82,7 @@ class Rule(TypedDict, total=False):
     risk_description: str
     condition_tree: ConditionNode  # compound 專用
     narrative_codes: list[str]     # 敘事用財報代碼
+    display_absolute: bool         # True: 金額顯示永遠取絕對值（科目名稱已表達流出方向時用）
 
 
 # ── 判斷結果 ────────────────────────────────────────
@@ -178,7 +189,9 @@ class ExeOutput(TypedDict, total=False):
     ``risk_report``。
 
     選填：``customer_id``、``report_date``（呼叫端未提供
-    則不寫入）。
+    則不寫入）；``narrative_sections``、``risk_sections``
+    （僅在 ``--generate`` 呼叫模型後才寫入，各為 ``4-1``~``4-5``
+    → 段落文字的對照）。
     """
 
     schema_version: str
@@ -190,6 +203,8 @@ class ExeOutput(TypedDict, total=False):
     risk_prompt: str
     grouped_report: GroupedReport
     risk_report: FullReport
+    narrative_sections: dict[str, str]
+    risk_sections: dict[str, str]
 
 
 # ── EXE 錯誤輸出 ─────────────────────────────────

@@ -75,8 +75,11 @@ def _parse_sub_condition(expr: str) -> dict[str, Any]:
 
     try:
         threshold_val = float(threshold_str)
-    except ValueError:
-        threshold_val = 0.0
+    except ValueError as e:
+        raise ValueError(
+            f"門檻值無法轉為數值: {threshold_str!r}"
+            f"（原始條件: {expr!r}）"
+        ) from e
 
     return {
         "node_type": "condition",

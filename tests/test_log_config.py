@@ -83,7 +83,7 @@ class TestSetupLoggingDefaultPath:
 
         log_config.setup_logging(request_id="r1")
 
-        log_dir = tmp_path / "log"
+        log_dir = tmp_path / "outputs" / "log"
         assert log_dir.is_dir()
         # 至少一個含 r1 的 log 檔
         files = list(log_dir.glob("*r1*.log"))

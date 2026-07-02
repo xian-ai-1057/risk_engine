@@ -1,14 +1,17 @@
-"""將風險 JSON 結果與財報敘事填入 prompt 模板。
+"""將風險 JSON 結果填入 prompt 模板。
 
 根據預定義的 section-to-placeholder 對應表，
-將 JSON sections 貼入 {{risk_results_N}}，
-將敘事資料貼入 {{narrative_N}} 佔位符。
+將 JSON sections 貼入 {{risk_results_N}} 佔位符。
 
-提供三種公開介面：
-  render_prompt()          — 原有合併（風險 + 敘事）
-  render_risk_prompt()     — 僅替換風險佔位符
+提供兩種公開介面：
+  render_risk_prompt()     — 替換風險佔位符
   render_narrative_prompt()— 將分群報表 JSON 填入
                              {{JSON_DATA}} 佔位符
+
+注：歷史上曾支援 ``{{narrative_N}}`` 占位符，但所有
+user prompt 已不再使用，相關路徑已移除。
+``utils.narrative.format_narrative_text`` 仍作為獨立工具
+保留供其他用途。
 
 用法:
     直接修改底部 CONFIG 區塊的檔案路徑，然後執行：
@@ -22,7 +25,6 @@ from typing import Any
 
 from risk_engine import report as report_mod
 from risk_engine import types
-from utils.narrative import format_narrative_text
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +35,6 @@ SECTION_MAPPING: dict[str, str] = {
     "經營效能": "{{risk_results_3}}",
     "獲利能力": "{{risk_results_4}}",
     "現金流量": "{{risk_results_5}}",
-}
-
-# 段落名稱 → 敘事佔位符
-NARRATIVE_MAPPING: dict[str, str] = {
-    "財務結構": "{{narrative_1}}",
-    "償債能力": "{{narrative_2}}",
-    "經營效能": "{{narrative_3}}",
-    "獲利能力": "{{narrative_4}}",
-    "現金流量": "{{narrative_5}}",
 }
 
 
@@ -109,19 +102,18 @@ def _format_risk_section(data: list) -> str:
 
 # ── 公開介面 ─────────────────────────────────────────
 
-def render_prompt(
+def render_risk_prompt(
     prompt_text: str,
     risk_json: dict,
-    narrative_json: dict[str, list] | None = None,
 ) -> str:
-    """將風險結果與敘事資料填入 prompt 模板。
+    """將風險判定結果填入 prompt 模板。
+
+    替換 {{risk_results_1}} ~ {{risk_results_5}}。
 
     Args:
-        prompt_text: prompt 模板的完整文字。
+        prompt_text: 風險 prompt 模板的完整文字。
         risk_json: 風險引擎輸出的 JSON dict，
             需包含 "sections" 欄位。
-        narrative_json: 敘事資料 dict（選用），
-            結構為 {段落名稱: [NarrativeItem, ...]}。
 
     Returns:
         替換完成的 prompt 文字。
@@ -135,7 +127,6 @@ def render_prompt(
     # 投影為 prompt 精簡版，只保留敘述必要欄位
     prompt_sections = report_mod.to_prompt_view(sections)
 
-    # 風險佔位符替換
     result, risk_matched, risk_unmatched = (
         _replace_placeholders(
             prompt_text, SECTION_MAPPING,
@@ -146,41 +137,8 @@ def render_prompt(
         "風險", risk_matched, risk_unmatched,
     )
 
-    # 敘事佔位符替換
-    if narrative_json:
-        result, narr_matched, narr_unmatched = (
-            _replace_placeholders(
-                result, NARRATIVE_MAPPING,
-                narrative_json,
-                format_narrative_text,
-            )
-        )
-        _log_match_report(
-            "敘事", narr_matched, narr_unmatched,
-        )
-
     logger.info("prompt 渲染完成")
     return result
-
-
-def render_risk_prompt(
-    prompt_text: str,
-    risk_json: dict,
-) -> str:
-    """僅將風險判定結果填入 prompt 模板。
-
-    替換 {{risk_results_1}} ~ {{risk_results_5}}。
-    委託 render_prompt() 處理，不傳入敘事資料。
-
-    Args:
-        prompt_text: 風險 prompt 模板的完整文字。
-        risk_json: 風險引擎輸出的 JSON dict，
-            需包含 "sections" 欄位。
-
-    Returns:
-        替換完成的 prompt 文字。
-    """
-    return render_prompt(prompt_text, risk_json)
 
 
 def render_narrative_prompt(
@@ -192,7 +150,7 @@ def render_narrative_prompt(
 
     替換 {{JSON_DATA}} 佔位符。若提供 period_dates，
     會先將 GroupedReport 轉換為格式化顯示值
-    （含單位、趨勢、實際日期 key）再填入。
+    （含單位、實際日期 key）再填入。
 
     Args:
         prompt_text: 敘事 prompt 模板的完整文字。
@@ -249,92 +207,38 @@ def render_narrative_prompt(
 
 # ── 主程式 ────────────────────────────────────────────
 
-def main() -> None:
-    """讀取檔案、渲染模板、輸出結果。"""
+def main(argv: list[str] | None = None) -> None:
+    """Dev-only：讀取單一風險結果 JSON、渲染指定 prompt 模板，
+    輸出渲染結果。
 
-    company_list = [
-        "財報(合併)__台揚科技",
-        "財報(合併)_美達工業",
-        "財報(單一)__台揚科技",
-        "財報(單一)_寶閤建設",
-        "財報(單一)_美達工業",
-        "財報(單一)_農生企業",
-    ]
+    用法::
 
-    prompt_path = (
-        "/home/jovyan/00_專案/報告生成/"
-        "法金報告生成/02_Code/V4/DATA/prompt/"
-        "user_prompt/"
-        "user_prompt_template_v3.txt"
+        python -m utils.combine_prompt \\
+            <prompt_template> <risk_json> <output_path>
+
+    本入口僅供開發者快速驗證模板替換；正式流程請走
+    :class:`risk_engine.pipeline.ReportPipeline`。
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Render risk prompt (dev-only).",
     )
+    parser.add_argument("prompt_template")
+    parser.add_argument("risk_json")
+    parser.add_argument("output_path")
+    ns = parser.parse_args(argv)
 
-    try:
-        with open(prompt_path, encoding="utf-8") as f:
-            prompt_text = f.read()
-    except FileNotFoundError:
-        logger.error("Prompt 模板不存在: %s", prompt_path)
-        raise
-    except OSError as e:
-        logger.error(
-            "讀取 Prompt 模板失敗: %s — %s",
-            prompt_path, e,
-        )
-        raise
+    with open(ns.prompt_template, encoding="utf-8") as f:
+        prompt_text = f.read()
+    with open(ns.risk_json, encoding="utf-8") as f:
+        risk_json = json.load(f)
 
-    for item in company_list:
-        json_path = (
-            f"/home/jovyan/00_專案/報告生成/"
-            f"法金報告生成/02_Code/V4/DATA/"
-            f"風險結果/{item}.json"
-        )
-        output_path = (
-            f"/home/jovyan/00_專案/報告生成/"
-            f"法金報告生成/02_Code/V4/DATA/"
-            f"prompt/{item}.txt"
-        )
+    rendered = render_risk_prompt(prompt_text, risk_json)
 
-        try:
-            with open(json_path, encoding="utf-8") as f:
-                risk_json = json.load(f)
-        except FileNotFoundError:
-            logger.error(
-                "風險結果檔案不存在: %s", json_path,
-            )
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(
-                "風險結果 JSON 格式錯誤: %s — %s",
-                json_path, e,
-            )
-            raise
-        except OSError as e:
-            logger.error(
-                "讀取風險結果失敗: %s — %s",
-                json_path, e,
-            )
-            raise
-
-        rendered = render_prompt(
-            prompt_text, risk_json,
-        )
-
-        try:
-            with open(
-                output_path, "w", encoding="utf-8",
-            ) as f:
-                f.write(rendered)
-        except PermissionError:
-            logger.error(
-                "無權限寫入檔案: %s", output_path,
-            )
-            raise
-        except OSError as e:
-            logger.error(
-                "寫入檔案失敗: %s — %s",
-                output_path, e,
-            )
-            raise
-        logger.info("已輸出至: %s", output_path)
+    with open(ns.output_path, "w", encoding="utf-8") as f:
+        f.write(rendered)
+    logger.info("已輸出至: %s", ns.output_path)
 
 
 if __name__ == "__main__":

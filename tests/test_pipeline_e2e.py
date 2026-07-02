@@ -1,12 +1,17 @@
 """端到端 (e2e) 整合測試。
 
-用 ``data/json/sample_report.json`` 與 ``data/indicators_config_v3.json``
+用 ``inputs/json_sample/sample_report.json`` 與
+``inputs/indicators_config_v3.json``
 跑完整 ``ReportPipeline.run()`` 流程，並以 main.py 的方式組裝 ExeOutput，
 驗證對外契約欄位齊備。
 
 此測試不依賴 HTML 解析（直接餵 JSON 形式 Report），故不需要 4 個 HTML
 檔即可在 CI 跑。Stage 5 的 smoke test 才會跑打包後 EXE 對 4 個 HTML
 的全鏈路。
+
+NOTE: ``indicators_config_v3.json`` 為快照測試專用 fixture，需與
+``inputs/json_sample/final_results.json`` 同步更新；目前若該檔案不存在，
+本檔的 12 個測試會在 fixture 階段直接 skip。
 """
 import json
 import re
@@ -20,13 +25,13 @@ from risk_engine.types import EXE_SCHEMA_VERSION
 
 
 _REPO = Path(__file__).resolve().parent.parent
-_SAMPLE_REPORT = _REPO / "data" / "json" / "sample_report.json"
-_CONFIG = _REPO / "data" / "indicators_config_v3.json"
-_PROMPT_DIR = _REPO / "data" / "prompt"
+_SAMPLE_REPORT = _REPO / "inputs" / "json_sample" / "sample_report.json"
+_CONFIG = _REPO / "inputs" / "indicators_config_v3.json"
+_PROMPT_DIR = _REPO / "inputs" / "prompt"
 
 
 def _find_prompt(filename_substring: str) -> Path:
-    """data/prompt 下的檔名是 git URL-escape 形式（#U...），
+    """inputs/prompt 下的檔名是 git URL-escape 形式（#U...），
     用內容關鍵字定位。"""
     candidates = list(_PROMPT_DIR.glob("*"))
     for p in candidates:
@@ -39,6 +44,16 @@ def _find_prompt(filename_substring: str) -> Path:
     raise FileNotFoundError(
         f"找不到含關鍵字 '{filename_substring}' 的 prompt 檔",
     )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _require_fixtures():
+    """Skip 整檔，若快照 fixture 不存在。"""
+    if not _CONFIG.is_file():
+        pytest.skip(
+            f"e2e fixture 缺少: {_CONFIG.name}",
+            allow_module_level=True,
+        )
 
 
 @pytest.fixture(scope="module")

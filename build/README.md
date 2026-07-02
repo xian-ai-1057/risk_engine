@@ -5,7 +5,7 @@
 | 檔案 / 目錄 | 用途 |
 |------|------|
 | `risk_analysis.spec` | PyInstaller 打包規格 |
-| `sample/` | 範例同層資源（設定檔、prompt 模板、tag table） |
+| `sample/` | 範例同層資源（指標 xlsx、兩份 prompt 模板） |
 | 本檔 | 打包步驟、部署目錄結構說明 |
 
 > **Smoke test 腳本**：見 `../scripts/smoke_test.sh`（POSIX）／`../scripts/smoke_test.ps1`（Windows）。
@@ -23,10 +23,10 @@ python -m venv .venv
 pip install pyinstaller
 
 # 從 repo root 執行
-pyinstaller build\risk_analysis.spec
+pyinstaller build\risk_analysis.spec --distpath outputs\dist
 ```
 
-成功後產出：`dist\risk_analysis.exe`
+成功後產出：`outputs\dist\risk_analysis.exe`
 
 特性：
 - onefile：單一 exe，方便上游部署
@@ -42,13 +42,19 @@ pyinstaller build\risk_analysis.spec
 ```
 deploy/
 ├── risk_analysis.exe
-├── indicators_config.json       # 必要：指標規則
+├── indicators_config.xlsx       # 必要：指標規則 + 敘事會科 + tag_table 三張 sheet
 ├── risk_user_prompt.txt         # 必要：風險 prompt 模板
 ├── narrative_user_prompt.txt    # 必要：敘事 prompt 模板
-├── tag_table.csv                # 選用：科目代碼對照
-├── log/                         # 自動建立：每次執行寫入 timestamp + request_id 命名的 log
-└── output/                      # 自動建立：未指定 -o 時的預設產出目錄
+└── outputs/                     # 自動建立：含 log/ 子目錄與未指定 -o 時的預設產出檔
+    └── log/
 ```
+
+> `indicators_config.xlsx` 內含三張工作表：
+> - `指標`：產業別風險規則
+> - `敘事`：每段落的會計科目清單
+> - `tag_table`：FA_RFNBR → FA_CANME 中文名稱對照（取代舊版 `tag_table.csv`）
+>
+> 自訂檔名時可用 `--xlsx <path>` 覆寫。
 
 `sample/` 子目錄提供一組可直接搬到部署目錄的範本（除 4 個 HTML 財報檔需自備）。
 
@@ -100,8 +106,8 @@ deploy/
 ## 4. 併發呼叫保證
 
 - `request_id` 預設自動產生 8 碼 hex；上游可覆寫以便追蹤
-- log 檔名：`log/<timestamp>_<request_id>.log` — 不同請求互不覆蓋
-- 預設 output 檔名：`output/result_<request_id>_<timestamp>.json`，**寫入路徑相對於 exe 同層而非 cwd**，避免上游併發呼叫時把產出檔寫到呼叫方目錄
+- log 檔名：`outputs/log/<timestamp>_<request_id>.log` — 不同請求互不覆蓋
+- 預設 output 檔名：`outputs/result_<request_id>_<timestamp>.json`，**寫入路徑相對於 exe 同層而非 cwd**，避免上游併發呼叫時把產出檔寫到呼叫方目錄
 - `setup_logging` 對同一 process 多次呼叫冪等；不會清掉外部已掛上的 handler
 
 ---
@@ -109,8 +115,8 @@ deploy/
 ## 5. Smoke test
 
 ```bash
-# 在 dist/ 中放好同層檔案 + 4 個 HTML 後
-bash scripts/smoke_test.sh ./dist/risk_analysis path/to/sample
+# 在 outputs/dist/ 中放好同層檔案 + 4 個 HTML 後
+bash scripts/smoke_test.sh ./outputs/dist/risk_analysis path/to/sample
 ```
 
 該腳本會：

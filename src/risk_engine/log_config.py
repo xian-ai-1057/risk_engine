@@ -3,7 +3,8 @@
 提供 setup_logging() 供 CLI 入口呼叫，
 同時輸出至 console 與 log 檔案。
 
-EXE 打包時 log 檔預設寫入 EXE 同層 log/ 子目錄，
+預設 log 寫入 ``get_base_dir()/outputs/log/``（開發 = repo root；
+EXE = EXE 同層），所有產出統一收進 outputs/。
 以時間戳 + request_id 命名確保並行安全。
 """
 import logging
@@ -54,7 +55,7 @@ def setup_logging(
                 pass
 
     if log_file is None:
-        log_dir = os.path.join(get_base_dir(), "log")
+        log_dir = os.path.join(get_base_dir(), "outputs", "log")
         os.makedirs(log_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         suffix = f"_{request_id}" if request_id else ""

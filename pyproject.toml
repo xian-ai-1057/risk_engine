@@ -8,13 +8,26 @@ version = "0.1.0"
 description = "財報風險判斷引擎"
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+# Web 介面（風險分析Demo）。刻意隔離為選用相依：核心引擎與 EXE 打包
+# 不得引入這些套件（見 build/risk_analysis.spec 的 excludes）。
+web = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+]
+
 [project.scripts]
 risk-checker = "scripts.risk_checker:main"
+risk-web = "web.app:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
-include = ["risk_engine*", "utils*"]
+# risk_engine / utils 於 src/；web 於 repo root（僅 web 介面用，非 EXE）。
+where = ["src", "."]
+include = ["risk_engine*", "utils*", "web*"]
+exclude = ["tests*", "build*", "deploy*", "docs*", "outputs*", "inputs*", "scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# 加入 "." 讓測試能 import 頂層的 web / scripts 套件。
+pythonpath = ["src", "."]

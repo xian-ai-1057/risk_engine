@@ -27,6 +27,7 @@
   3. 在本模組實作 apply_post_rules()，
      遍歷 meta-rules 並呼叫 evaluate_node()
 """
+import warnings
 from typing import Any
 
 from risk_engine import types
@@ -36,7 +37,11 @@ def apply_post_rules(
     report_result: types.FullReport,
     meta_rules: list[dict[str, Any]] | None = None,
 ) -> types.FullReport:
-    """對已完成的報告套用多規則聯合觸發。
+    """對已完成的報告套用多規則聯合觸發（預留 API，目前 pass-through）。
+
+    .. deprecated::
+        當前實作僅 pass-through，等待 meta-rule 規格定案後啟用。
+        在功能落地前不要在新程式碼仰賴本函式做任何邏輯處理。
 
     Args:
         report_result: generate_report() 的輸出。
@@ -48,6 +53,13 @@ def apply_post_rules(
     """
     if not meta_rules:
         return report_result
+
+    warnings.warn(
+        "apply_post_rules: meta-rule 功能尚未實作，"
+        "傳入的 meta_rules 將被忽略。",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     # TODO: 未來實作 meta-rule 邏輯
     # 1. 收集所有已觸發的 tag_id

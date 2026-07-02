@@ -4,14 +4,23 @@
 設計要點：
   * 入口：scripts/main.py
   * 採 onefile 模式（單一 exe），避免上游部署需處理多檔
-  * 不打包業務資料（指標 xlsx / 兩個 prompt / tag_table.csv）—
-    設計上要求這些檔放在 exe 同層，方便不重新打包就更新規則或 prompt
-  * 需要 pandas + openpyxl 來讀指標 xlsx（utils.xlsx_to_indicators）
+  * 不打包業務資料（指標 xlsx / 兩個 prompt）—設計上要求這些檔放在
+    exe 同層，方便不重新打包就更新規則或 prompt
+  * 需要 openpyxl 來讀指標 xlsx（utils.xlsx_to_indicators），
+    指標規則、敘事會科、科目代碼對照表（tag_table）皆整合在 xlsx 內。
+    pandas/numpy 已從主流程移除（為了壓 exe 體積，原本 ~33MB → ~10MB），
+    excludes 內顯式排除避免被 hook 拉進來
+
+部署目錄結構（exe 同層）：
+  risk_analysis.exe
+  indicators_config.xlsx     ← 指標規則 + 敘事會科 + tag_table 三 sheet
+  risk_user_prompt.txt
+  narrative_user_prompt.txt
 
 打包指令（在 repo root 執行）：
-  pyinstaller build/risk_analysis.spec
+  pyinstaller build/risk_analysis.spec --distpath outputs/dist
 
-產出：dist/risk_analysis(.exe)
+產出：outputs/dist/risk_analysis(.exe)
 """
 import os
 import sys
@@ -53,20 +62,38 @@ a = Analysis(
         "utils.narrative",
         "utils.simple_convert",
         "utils.xlsx_to_indicators",
-        # xlsx → DataFrame 需要 pandas + openpyxl 引擎
-        "pandas",
+        # xlsx 解析改用純 openpyxl（不再經過 pandas）
         "openpyxl",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # 主流程不用，避免被巨大依賴拖累 exe 體積
-        "numpy.distutils",
+        # 主流程不用，避免被巨大依賴拖累 exe 體積。
+        # pandas/numpy 完全排除：xlsx_to_indicators 改純 openpyxl 後不再需要。
+        "pandas",
+        "numpy",
         "docx",
         "matplotlib",
         "scipy",
         "tkinter",
+        # 補強：其他常見 PyInstaller 誤抓的重型依賴
+        "PIL",
+        "pytest",
+        "IPython",
+        "jupyter",
+        # 這支 util 是 standalone CLI、會 import pandas，
+        # 主流程不會經過它；排除以免被 graph analyzer 拉進來。
+        "utils.xlsx_to_report_json",
+        # Web 介面（web/ 套件與其相依）只供 risk-web 使用，
+        # scripts/main.py 不會 import；顯式排除確保 web stack
+        # 永遠不會被冷凍進 EXE。
+        "web",
+        "fastapi",
+        "starlette",
+        "uvicorn",
+        "python_multipart",
+        "anyio",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

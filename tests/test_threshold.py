@@ -1,4 +1,6 @@
 """threshold 模組單元測試。"""
+import pytest
+
 from risk_engine.threshold import parse_threshold
 
 
@@ -113,3 +115,49 @@ class TestUnknownThreshold:
         result = parse_threshold(">100\n這是註解")
         assert result["compare_type"] == "absolute"
         assert result["threshold"] == 100.0
+
+
+class TestOrPrecedence:
+    """CLAUDE.md 設計：A AND B OR C → or(and(A,B), C)。
+
+    與 SQL/Python 慣例相反，先依 OR 切再依 AND 切。
+    """
+
+    def test_and_or_parses_as_or_outermost(self):
+        result = parse_threshold(
+            "TIBA001 > 1 AND TIBA002 > 2 OR TIBA003 > 3"
+        )
+        assert result["compare_type"] == "compound"
+        tree = result["condition_tree"]
+        # 最外層必為 OR
+        assert tree["node_type"] == "or"
+        assert len(tree["children"]) == 2
+        # 第一個子節點為 AND（左側兩個條件）
+        left = tree["children"][0]
+        assert left["node_type"] == "and"
+        assert len(left["children"]) == 2
+        assert left["children"][0]["threshold"] == 1.0
+        assert left["children"][1]["threshold"] == 2.0
+        # 第二個子節點為單一條件 C
+        right = tree["children"][1]
+        assert right["node_type"] == "condition"
+        assert right["threshold"] == 3.0
+
+    def test_or_or_chain_flat(self):
+        """A OR B OR C → 單一 OR 節點，三個子節點。"""
+        result = parse_threshold(
+            "TIBA001 > 1 OR TIBA002 > 2 OR TIBA003 > 3"
+        )
+        tree = result["condition_tree"]
+        assert tree["node_type"] == "or"
+        assert len(tree["children"]) == 3
+
+
+class TestThresholdValidation:
+    """非數值門檻不應靜默退化為 0.0。"""
+
+    def test_non_numeric_threshold_raises(self):
+        with pytest.raises(ValueError, match="無法轉為數值"):
+            parse_threshold(
+                "TIBB011 >= 不是數字 AND TIBB018 >= 60"
+            )

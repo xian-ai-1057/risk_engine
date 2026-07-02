@@ -1,10 +1,10 @@
-"""將 data/html 中的財報 HTML 檔案組合為 JSON。
+"""將 inputs/html 中的財報 HTML 檔案組合為 JSON。
 
 解析 4 個 HTML 檔案（Big5 編碼）中的財務資料表，
 產出與 risk_engine/loader.py 相容的 JSON 格式。
 
 Usage:
-    python -m utils.html_to_json --input data/html --output data/report.json
+    python -m utils.html_to_json --input inputs/html --output outputs/report.json
 """
 import argparse
 import csv
@@ -305,8 +305,12 @@ _FILE_CONFIG = [
 
 
 def _read_html(path: str) -> str:
-    """以 Big5 編碼讀取 HTML 檔案。"""
-    # 嘗試 Big5，失敗則用 utf-8
+    """讀取 HTML，依序嘗試 big5 / cp950 / utf-8 嚴格解碼。
+
+    若三者都解碼失敗，最後以 ``big5 errors="replace"`` 容錯
+    讀取並 ``logger.warning`` 標示損毀字元數，避免靜默把
+    中文換成 ``?`` 卻沒有任何訊號。
+    """
     for enc in ("big5", "cp950", "utf-8"):
         try:
             with open(path, encoding=enc, errors="strict") as f:
@@ -314,14 +318,23 @@ def _read_html(path: str) -> str:
         except (UnicodeDecodeError, LookupError):
             continue
 
-    # 最後用 big5 + replace 容錯
+    # 最後用 big5 + replace 容錯，並計算被替換的字元數做警告
     with open(path, encoding="big5", errors="replace") as f:
-        return f.read()
+        text = f.read()
+    replaced = text.count("�")
+    if replaced:
+        logger.warning(
+            "HTML 解碼失敗，已用 replace 容錯讀取: "
+            "%s (損毀字元數=%d)",
+            path, replaced,
+        )
+    return text
 
 
 def convert_html_files_to_dict(
     html_paths: list[str],
     tag_table_path: str | None = None,
+    tag_map: dict[str, str] | None = None,
 ) -> dict:
     """將 4 個 HTML 財報轉為 dict（純記憶體，不寫檔案）。
 
@@ -332,6 +345,8 @@ def convert_html_files_to_dict(
         html_paths: 4 個 HTML 檔案路徑，順序須對應
             _FILE_CONFIG（財務概況、財務比率、現金流量、淨值調節）。
         tag_table_path: 科目代碼對照表 CSV 路徑（選填）。
+        tag_map: 已預先載入的科目對照（如從 xlsx tag_table sheet 取得）。
+            若提供（即使空 dict）將優先使用，不再讀 ``tag_table_path``。
 
     Returns:
         與 risk_engine/loader.py 相容的 dict 結構。
@@ -346,10 +361,11 @@ def convert_html_files_to_dict(
             f"實際收到 {len(html_paths)} 個"
         )
 
-    # 載入科目名稱對照
-    tag_map: dict[str, str] = {}
-    if tag_table_path and os.path.isfile(tag_table_path):
-        tag_map = _load_tag_table(tag_table_path)
+    # 載入科目名稱對照：tag_map 顯式優先；否則 fallback 走 CSV
+    if tag_map is None:
+        tag_map = {}
+        if tag_table_path and os.path.isfile(tag_table_path):
+            tag_map = _load_tag_table(tag_table_path)
 
     result: dict = {}
     skipped: dict[str, list[str]] = {}
@@ -499,13 +515,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--input", "-i",
-        default="data/html",
-        help="HTML 資料夾路徑（預設: data/html）",
+        default="inputs/html",
+        help="HTML 資料夾路徑（預設: inputs/html）",
     )
     parser.add_argument(
         "--output", "-o",
-        default="data/report.json",
-        help="輸出 JSON 路徑（預設: data/report.json）",
+        default="outputs/report.json",
+        help="輸出 JSON 路徑（預設: outputs/report.json）",
     )
     parser.add_argument(
         "--tag-table", "-t",

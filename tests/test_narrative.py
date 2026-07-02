@@ -47,11 +47,17 @@ def report():
     }
 
 
-def _item(key, expression, display_name="", unit=""):
-    return {
+def _item(
+    key, expression, display_name="", unit="",
+    display_absolute=False,
+):
+    entry = {
         "key": key, "expression": expression,
         "display_name": display_name, "unit": unit,
     }
+    if display_absolute:
+        entry["display_absolute"] = True
+    return entry
 
 
 @pytest.fixture
@@ -244,6 +250,51 @@ class TestBuildGroupedNarrative:
             report, {},
         )
         assert result == {}
+
+    def test_display_absolute_flag_propagates_to_row(
+        self, report,
+    ):
+        """item 帶 display_absolute=True → row 也帶 True。"""
+        nf = {
+            "現金流量": [
+                _item(
+                    "TIBA009", "TIBA009",
+                    display_absolute=True,
+                ),
+            ],
+        }
+        result = narrative.build_grouped_narrative(
+            report, nf,
+        )
+        row = result["現金流量"]["TIBA009"]
+        assert row.get("display_absolute") is True
+
+    def test_default_no_display_absolute_in_row(
+        self, report,
+    ):
+        """item 未標旗標 → row 不寫該 key（稀疏）。"""
+        nf = {
+            "財務結構": [_item("TIBA009", "TIBA009")],
+        }
+        result = narrative.build_grouped_narrative(
+            report, nf,
+        )
+        row = result["財務結構"]["TIBA009"]
+        assert "display_absolute" not in row
+
+    def test_parent_key_propagates_to_row(self, report):
+        """filter item 帶 parent_key → row 也帶 parent_key。"""
+        child = _item("TIBA009", "TIBA009")
+        child["parent_key"] = "TIBA040"
+        nf = {"財務結構": [_item("TIBA040", "TIBA040"), child]}
+        result = narrative.build_grouped_narrative(
+            report, nf,
+        )
+        assert (
+            result["財務結構"]["TIBA009"]["parent_key"]
+            == "TIBA040"
+        )
+        assert "parent_key" not in result["財務結構"]["TIBA040"]
 
 
 # ── build_narrative (list-style) ────────────────────

@@ -15,7 +15,7 @@ from utils import narrative
 
 SAMPLE_REPORT = (
     Path(__file__).resolve().parents[1]
-    / "data" / "json" / "sample_report.json"
+    / "inputs" / "json_sample" / "sample_report.json"
 )
 
 

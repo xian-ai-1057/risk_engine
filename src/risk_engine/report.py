@@ -11,7 +11,7 @@ from typing import Any
 from risk_engine import types
 from risk_engine import formula as formula_mod
 from risk_engine import checker as checker_mod
-from utils.simple_convert import UNIT_FORMATTERS
+from utils.simple_convert import format_with_unit
 
 # 末端 *<常數> 模式（如 "...*100"）：將純比率重新放大為原單位，
 # 應排除「同單位除法 → 無量綱」規則，沿用 operand 單位顯示。
@@ -83,22 +83,33 @@ def _infer_unit(
 def _format_display(
     val: float | None,
     unit: str,
+    *,
+    display_absolute: bool = False,
 ) -> str | None:
     """將數值格式化為含單位的顯示字串。
 
     Args:
         val: 數值，None 時直接回傳 None。
         unit: 單位字串（如 "仟元"、"%"）。
+        display_absolute: True 時取絕對值顯示，
+            供「發放現金股利」等科目名稱已表達流出方向的指標。
 
     Returns:
         格式化顯示字串，或 None。
     """
     if val is None:
         return None
-    formatter = UNIT_FORMATTERS.get(unit)
-    if formatter:
-        return formatter(val)
-    return str(round(val, 2))
+    result = format_with_unit(
+        val, unit, display_absolute=display_absolute,
+    )
+    if result is not None:
+        return result
+    rounded = round(val, 2)
+    if display_absolute:
+        return str(abs(rounded))
+    if val < 0:
+        return f"({abs(rounded)})"
+    return str(rounded)
 
 
 # ── 報告產生 ────────────────────────────────────────
@@ -239,6 +250,8 @@ def _evaluate_all(
 def _enrich_condition_details(
     tag: dict[str, Any],
     report: types.Report,
+    *,
+    display_absolute: bool = False,
 ) -> None:
     """就地為 condition_details 的每筆明細補上 subject 與單位顯示。
 
@@ -268,7 +281,10 @@ def _enrich_condition_details(
                 report.get(bases[0], {}).get("單位", "")
                 if bases else ""
             )
-        d["display"] = _format_display(d.get("value"), unit)
+        d["display"] = _format_display(
+            d.get("value"), unit,
+            display_absolute=display_absolute,
+        )
 
 
 def _evaluate_indicator(
@@ -289,17 +305,24 @@ def _evaluate_indicator(
     if is_compound:
         current_val = None
         prev_val = None
+        current_reason = formula_mod.REASON_OK
+        prev_reason = formula_mod.REASON_OK
     else:
-        current_val = formula_mod.evaluate_formula(
-            code, report, "Current",
+        current_val, current_reason = (
+            formula_mod.evaluate_formula_detailed(
+                code, report, "Current",
+            )
         )
         has_prev = (sec, code) in needs_prev
-        prev_val = (
-            formula_mod.evaluate_formula(
-                code, report, "Period_2",
+        if has_prev:
+            prev_val, prev_reason = (
+                formula_mod.evaluate_formula_detailed(
+                    code, report, "Period_2",
+                )
             )
-            if has_prev else None
-        )
+        else:
+            prev_val = None
+            prev_reason = formula_mod.REASON_OK
 
     # 取得單位：優先用 config 的 result_unit，否則推斷
     unit = (
@@ -307,8 +330,17 @@ def _evaluate_indicator(
         or (_infer_unit(code, report)
             if not is_compound else "")
     )
-    current_display = _format_display(current_val, unit)
-    previous_display = _format_display(prev_val, unit)
+    display_absolute = bool(
+        code_rules[0].get("display_absolute", False),
+    )
+    current_display = _format_display(
+        current_val, unit,
+        display_absolute=display_absolute,
+    )
+    previous_display = _format_display(
+        prev_val, unit,
+        display_absolute=display_absolute,
+    )
 
     # 判別語義 kind（允許 config override）
     value_kind = (
@@ -339,8 +371,15 @@ def _evaluate_indicator(
         result = checker_mod.check_rule(
             current_val, prev_val, r,
             report=report,
+            current_reason=current_reason,
+            prev_reason=prev_reason,
         )
-        _enrich_condition_details(result, report)
+        _enrich_condition_details(
+            result, report,
+            display_absolute=bool(
+                r.get("display_absolute", False),
+            ),
+        )
         taggings.append(result)
         counters["total_rules"] += 1
         counters[result["status"]] = (
@@ -369,6 +408,7 @@ _STATUS_MAP = {
     "triggered": "T",
     "not_triggered": "N",
     "missing": "M",
+    "undefined": "U",
 }
 
 

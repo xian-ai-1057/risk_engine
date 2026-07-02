@@ -1,9 +1,19 @@
 __pycache__/
 *.pyc
 *.pyo
-log/
+# 所有產出統一收進 outputs/（含 log/、dist/、timing_log_*.csv 等）
+outputs/
 *.egg-info/
 .pytest_cache/
 .venv/
 uv.lock
+.DS_Store
+Archive.zip
+
+# 建置產物：EXE 不進版控
+*.exe
+deploy/risk_analysis.exe
+
+# 本機工具設定
+.claude/
 

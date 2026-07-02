@@ -6,6 +6,13 @@ from risk_engine.checker import (
     _calc_period_change_pct,
     check_rule,
     evaluate_node,
+    evaluate_node_detailed,
+)
+from risk_engine.formula import (
+    REASON_ERROR,
+    REASON_MISSING,
+    REASON_OK,
+    REASON_UNDEFINED,
 )
 
 
@@ -382,3 +389,267 @@ class TestCalcPeriodChange:
 
     def test_abs_decrease(self):
         assert _calc_period_change_abs(50, 90, "decrease") == 40
+
+    # ── 鎖定 abs() 語意（對齊 xlsx 公式設計） ──
+    # CLAUDE.md / inputs/indicators/20260507_7大關鍵指標.xlsx：
+    # _calc_period_change_pct 比較的是「規模」絕對值的變動率，
+    # 不分數值正負。改邏輯前請回查 xlsx 對應指標的公式與風險敘述。
+
+    def test_pct_both_negative_increase_in_magnitude(self):
+        # current=-200, prev=-100, direction=increase
+        # 規模從 100 放大到 200 → +100%
+        result = _calc_period_change_pct(
+            -200, -100, "increase",
+        )
+        assert result == pytest.approx(100.0)
+
+    def test_pct_negative_to_positive_uses_abs(self):
+        # current=50, prev=-100, direction=decrease
+        # |50| < |-100| 故規模縮小：(100-50)/100 = 50%
+        result = _calc_period_change_pct(
+            50, -100, "decrease",
+        )
+        assert result == pytest.approx(50.0)
+
+    def test_pct_zero_current_decrease(self):
+        # current=0, prev=100, direction=decrease → -100% 縮小
+        result = _calc_period_change_pct(
+            0, 100, "decrease",
+        )
+        assert result == pytest.approx(100.0)
+
+
+# ── undefined status (除零 vs 真缺值) ─────────────────
+
+class TestUndefinedStatus:
+    """區分『真缺值』(missing) 與『運算未定義』(undefined)。"""
+
+    def _abs_rule(self):
+        return {
+            "tag_id": "T_ABS",
+            "compare_type": "absolute",
+            "operator": ">",
+            "threshold": 100,
+            "risk_description": "觸發",
+        }
+
+    def _pct_rule(self):
+        return {
+            "tag_id": "T_PCT",
+            "compare_type": "period_change_pct",
+            "operator": ">",
+            "threshold": 30,
+            "direction": "increase",
+            "risk_description": "觸發",
+        }
+
+    def test_absolute_undefined_when_current_reason_is_undefined(self):
+        # 本期 None 但 reason 為 undefined（除零）→ status: undefined
+        result = check_rule(
+            None, None, self._abs_rule(),
+            current_reason=REASON_UNDEFINED,
+        )
+        assert result["status"] == "undefined"
+
+    def test_absolute_missing_when_current_reason_is_missing(self):
+        # 本期 None 且 reason 為 missing（真缺值）→ status: missing
+        result = check_rule(
+            None, None, self._abs_rule(),
+            current_reason=REASON_MISSING,
+        )
+        assert result["status"] == "missing"
+
+    def test_absolute_default_reason_treats_none_as_missing(self):
+        # 沒帶 reason（預設 ok）但 val 是 None：fallback 為 missing
+        result = check_rule(None, None, self._abs_rule())
+        assert result["status"] == "missing"
+
+    def test_absolute_error_reason_maps_to_undefined(self):
+        # error 視為「無法計算」，與 undefined 同一 status
+        result = check_rule(
+            None, None, self._abs_rule(),
+            current_reason=REASON_ERROR,
+        )
+        assert result["status"] == "undefined"
+
+    def test_period_change_undefined_from_current_reason(self):
+        result = check_rule(
+            None, 100.0, self._pct_rule(),
+            current_reason=REASON_UNDEFINED,
+        )
+        assert result["status"] == "undefined"
+
+    def test_period_change_undefined_from_prev_reason(self):
+        result = check_rule(
+            100.0, None, self._pct_rule(),
+            prev_reason=REASON_UNDEFINED,
+        )
+        assert result["status"] == "undefined"
+
+    def test_period_change_missing_when_prev_reason_missing(self):
+        result = check_rule(
+            100.0, None, self._pct_rule(),
+            prev_reason=REASON_MISSING,
+        )
+        assert result["status"] == "missing"
+
+    def test_period_change_pct_zero_prev_marks_undefined(self):
+        # 兩期值都有，但前期 0 導致變動率分母為零 → undefined
+        # （之前版本誤標 missing，現修正）
+        result = check_rule(
+            150.0, 0.0, self._pct_rule(),
+        )
+        assert result["status"] == "undefined"
+
+
+# ── evaluate_node_detailed: 條件樹 reason 傳遞 ────────
+
+class TestEvaluateNodeDetailed:
+    def test_leaf_ok(self):
+        report = {"TIBA001": {"Current": 50.0}}
+        node = {
+            "node_type": "condition",
+            "value_formula": "TIBA001",
+            "operator": ">",
+            "threshold": 30,
+        }
+        result, reason, details = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (True, REASON_OK)
+
+    def test_leaf_undefined_propagates(self):
+        report = {
+            "TIBA001": {"Current": 1.0},
+            "TIBA002": {"Current": 0.0},
+        }
+        node = {
+            "node_type": "condition",
+            "value_formula": "TIBA001/TIBA002",
+            "operator": ">",
+            "threshold": 1,
+        }
+        result, reason, _ = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (None, REASON_UNDEFINED)
+
+    def test_leaf_missing_propagates(self):
+        report = {"TIBA001": {"Current": None}}
+        node = {
+            "node_type": "condition",
+            "value_formula": "TIBA001",
+            "operator": ">",
+            "threshold": 1,
+        }
+        result, reason, _ = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (None, REASON_MISSING)
+
+    def test_and_short_circuit_false_overrides_undefined(self):
+        # AND 內一葉 False、一葉 undefined → 整體 False（短路）
+        report = {
+            "TIBA001": {"Current": 1.0},
+            "TIBA002": {"Current": 0.0},
+            "TIBA003": {"Current": 5.0},
+        }
+        node = {
+            "node_type": "and",
+            "children": [
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA001/TIBA002",
+                    "operator": ">", "threshold": 1,
+                },
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA003",
+                    "operator": ">", "threshold": 100,
+                },
+            ],
+        }
+        result, reason, _ = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (False, REASON_OK)
+
+    def test_or_short_circuit_true_overrides_undefined(self):
+        report = {
+            "TIBA001": {"Current": 1.0},
+            "TIBA002": {"Current": 0.0},
+            "TIBA003": {"Current": 200.0},
+        }
+        node = {
+            "node_type": "or",
+            "children": [
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA001/TIBA002",
+                    "operator": ">", "threshold": 1,
+                },
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA003",
+                    "operator": ">", "threshold": 100,
+                },
+            ],
+        }
+        result, reason, _ = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (True, REASON_OK)
+
+    def test_and_propagates_undefined_when_no_short_circuit(self):
+        # 所有葉節點都 undefined → 整棵 undefined
+        report = {
+            "TIBA001": {"Current": 1.0},
+            "TIBA002": {"Current": 0.0},
+        }
+        node = {
+            "node_type": "and",
+            "children": [
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA001/TIBA002",
+                    "operator": ">", "threshold": 1,
+                },
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA001/TIBA002",
+                    "operator": "<", "threshold": 1,
+                },
+            ],
+        }
+        result, reason, _ = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (None, REASON_UNDEFINED)
+
+    def test_undefined_dominates_missing_in_mixed_children(self):
+        # 一葉 missing、一葉 undefined → 整棵 undefined
+        # （只要任一葉是除零，整體就以 undefined 呈現）
+        report = {
+            "TIBA001": {"Current": None},
+            "TIBA002": {"Current": 1.0},
+            "TIBA003": {"Current": 0.0},
+        }
+        node = {
+            "node_type": "and",
+            "children": [
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA001",
+                    "operator": ">", "threshold": 1,
+                },
+                {
+                    "node_type": "condition",
+                    "value_formula": "TIBA002/TIBA003",
+                    "operator": ">", "threshold": 1,
+                },
+            ],
+        }
+        result, reason, _ = evaluate_node_detailed(
+            node, report,
+        )
+        assert (result, reason) == (None, REASON_UNDEFINED)

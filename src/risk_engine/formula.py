@@ -4,6 +4,19 @@
 解析為安全的四則運算，從財報取值後計算結果。
 
 取代原本的 eval()，僅允許數值與 +-*/ 括號運算。
+
+回傳值有兩種介面：
+- :func:`evaluate_formula`：回 ``float | None``（向後相容）。
+- :func:`evaluate_formula_detailed`：回 ``(float | None, reason)``，
+  ``reason`` 為下列之一：
+
+  - ``"ok"``：算出有效數值。
+  - ``"missing"``：任一代碼缺值或代碼不存在於財報。
+  - ``"undefined"``：算式中除零，資料完整但比率未定義。
+  - ``"error"``：公式解析失敗、token 非法（不該發生，視為 bug）。
+
+判定優先序：``missing > undefined > error``（``_substitute_codes``
+在求值前先發現缺值就回傳，自然產生此優先序）。
 """
 import logging
 import re
@@ -36,6 +49,12 @@ VALUE_KIND_PERIOD_CHANGE_ABS = "period_change_abs"
 VALUE_KIND_PERIOD_CHANGE_PCT = "period_change_pct"
 VALUE_KIND_MULTI_PERIOD_SUM = "multi_period_sum"
 VALUE_KIND_COMPOUND = "compound"
+
+# 公式求值結果 reason 列舉
+REASON_OK = "ok"
+REASON_MISSING = "missing"
+REASON_UNDEFINED = "undefined"
+REASON_ERROR = "error"
 
 
 def _resolve_code(
@@ -271,15 +290,30 @@ class _Parser:
         return token
 
     def parse(self) -> float | None:
-        """解析並求值，失敗回傳 None。"""
+        """解析並求值，失敗回傳 None。
+
+        為向後相容保留此介面；需要區分錯誤類型時請改用
+        :meth:`parse_detailed`。
+        """
+        value, _ = self.parse_detailed()
+        return value
+
+    def parse_detailed(self) -> tuple[float | None, str]:
+        """解析並求值，回傳 ``(value, reason)``。
+
+        - 成功 → ``(value, "ok")``
+        - 除零 → ``(None, "undefined")``
+        - 解析錯誤 / token 不全 → ``(None, "error")``
+        """
         try:
             result = self._expr()
             if self._pos != len(self._tokens):
-                return None
-            return result
-        except (ValueError, ZeroDivisionError,
-                IndexError):
-            return None
+                return None, REASON_ERROR
+            return result, REASON_OK
+        except ZeroDivisionError:
+            return None, REASON_UNDEFINED
+        except (ValueError, IndexError):
+            return None, REASON_ERROR
 
     def _expr(self) -> float:
         """expr = term (('+' | '-') term)*"""
@@ -327,18 +361,25 @@ class _Parser:
 
 
 def _safe_eval(expr: str) -> float | None:
-    """安全求值四則運算式。
+    """安全求值四則運算式（向後相容介面，回 ``float | None``）。"""
+    return _safe_eval_detailed(expr)[0]
+
+
+def _safe_eval_detailed(expr: str) -> tuple[float | None, str]:
+    """安全求值四則運算式，並回傳 ``(value, reason)``。
 
     Args:
         expr: 純數值運算式。
 
     Returns:
-        計算結果，失敗回傳 None。
+        - 成功 → ``(value, "ok")``
+        - 除零 → ``(None, "undefined")``
+        - tokenize 失敗 / 解析錯誤 → ``(None, "error")``
     """
     tokens = _tokenize(expr)
     if tokens is None:
-        return None
-    return _Parser(tokens).parse()
+        return None, REASON_ERROR
+    return _Parser(tokens).parse_detailed()
 
 
 # ── 公開介面 ────────────────────────────────────────
@@ -349,6 +390,9 @@ def evaluate_formula(
     period: str = "Current",
 ) -> float | None:
     """計算公式，從財報取值後做四則運算。
+
+    向後相容介面，僅回傳數值；需區分缺值/除零/錯誤時請改用
+    :func:`evaluate_formula_detailed`。
 
     支援格式：
       - 單一代碼:  TIBB002
@@ -365,13 +409,36 @@ def evaluate_formula(
     Returns:
         計算結果，任一代碼缺值或運算失敗回傳 None。
     """
+    return evaluate_formula_detailed(formula, report, period)[0]
+
+
+def evaluate_formula_detailed(
+    formula: str,
+    report: types.Report,
+    period: str = "Current",
+) -> tuple[float | None, str]:
+    """計算公式，回傳 ``(value, reason)``。
+
+    reason 為 :data:`REASON_OK` / :data:`REASON_MISSING` /
+    :data:`REASON_UNDEFINED` / :data:`REASON_ERROR` 之一。
+    判定優先序：missing > undefined > error。
+
+    Args:
+        formula: 公式字串。
+        report: 財報資料 dict。
+        period: 預設取值欄位。
+
+    Returns:
+        ``(value, reason)``。``value`` 在 reason != "ok" 時為 None。
+    """
     expr = _substitute_codes(formula, report, period)
     if expr is None:
-        return None
-    result = _safe_eval(expr)
+        return None, REASON_MISSING
+    result, reason = _safe_eval_detailed(expr)
     if result is None:
         logger.warning(
-            "公式 '%s' 運算失敗，運算式: '%s'",
-            formula, expr,
+            "公式 '%s' 運算失敗 (期別: %s, reason: %s)，"
+            "運算式: '%s'",
+            formula, period, reason, expr,
         )
-    return result
+    return result, reason

@@ -2,6 +2,10 @@
 import pytest
 
 from risk_engine.formula import (
+    REASON_ERROR,
+    REASON_MISSING,
+    REASON_OK,
+    REASON_UNDEFINED,
     VALUE_KIND_COMPOUND,
     VALUE_KIND_CURRENT,
     VALUE_KIND_MULTI_PERIOD_SUM,
@@ -9,9 +13,11 @@ from risk_engine.formula import (
     VALUE_KIND_PERIOD_CHANGE_PCT,
     _resolve_code,
     _safe_eval,
+    _safe_eval_detailed,
     _tokenize,
     classify_formula,
     evaluate_formula,
+    evaluate_formula_detailed,
     extract_codes,
     extract_operands,
 )
@@ -123,6 +129,91 @@ class TestSafeEval:
 
     def test_single_number(self):
         assert _safe_eval("42") == 42.0
+
+
+# ── _safe_eval_detailed ───────────────────────────────
+
+class TestSafeEvalDetailed:
+    def test_valid_returns_ok(self):
+        assert _safe_eval_detailed("1+2") == (3.0, REASON_OK)
+
+    def test_division_by_zero_returns_undefined(self):
+        assert _safe_eval_detailed("1/0") == (None, REASON_UNDEFINED)
+
+    def test_division_by_zero_in_subexpr(self):
+        # 子運算式除零仍應觸發 undefined
+        assert _safe_eval_detailed("(1+2)/(3-3)") == (
+            None, REASON_UNDEFINED,
+        )
+
+    def test_invalid_syntax_returns_error(self):
+        # 連續運算子屬解析錯誤，視為 error 而非 undefined
+        assert _safe_eval_detailed("1++2") == (None, REASON_ERROR)
+
+    def test_invalid_token_returns_error(self):
+        assert _safe_eval_detailed("1+abc") == (None, REASON_ERROR)
+
+
+# ── evaluate_formula_detailed ─────────────────────────
+
+class TestEvaluateFormulaDetailed:
+    @pytest.fixture()
+    def report(self):
+        return {
+            "TIBA001": {
+                "FA_CANME": "A 科目", "單位": "仟元",
+                "Current": 100.0, "Period_2": 50.0,
+                "Period_3": 25.0,
+            },
+            "TIBA002": {
+                "FA_CANME": "B 科目", "單位": "仟元",
+                "Current": 0.0, "Period_2": None,
+                "Period_3": 10.0,
+            },
+        }
+
+    def test_ok(self, report):
+        assert evaluate_formula_detailed(
+            "TIBA001+TIBA002", report,
+        ) == (100.0, REASON_OK)
+
+    def test_division_by_zero_returns_undefined(self, report):
+        # TIBA002 在當期為 0，TIBA001/TIBA002 → undefined
+        assert evaluate_formula_detailed(
+            "TIBA001/TIBA002", report, "Current",
+        ) == (None, REASON_UNDEFINED)
+
+    def test_missing_value_returns_missing(self, report):
+        # TIBA002 在 Period_2 為 None
+        assert evaluate_formula_detailed(
+            "TIBA001/TIBA002", report, "Period_2",
+        ) == (None, REASON_MISSING)
+
+    def test_missing_takes_precedence_over_undefined(self):
+        # 公式同時涉及缺值代碼與除零情境，
+        # missing 優先（_substitute_codes 在求值前就 short-circuit）
+        report_missing = {
+            "TIBA001": {"Current": None},
+            "TIBA002": {"Current": 0.0},
+        }
+        assert evaluate_formula_detailed(
+            "TIBA001/TIBA002", report_missing, "Current",
+        ) == (None, REASON_MISSING)
+
+    def test_missing_code_returns_missing(self, report):
+        # 公式中代碼根本不存在於財報
+        assert evaluate_formula_detailed(
+            "TIBA999+TIBA001", report,
+        ) == (None, REASON_MISSING)
+
+    def test_evaluate_formula_backward_compat(self, report):
+        # 向後相容介面回傳僅 value
+        assert evaluate_formula(
+            "TIBA001+TIBA002", report,
+        ) == 100.0
+        assert evaluate_formula(
+            "TIBA001/TIBA002", report, "Current",
+        ) is None
 
 
 # ── evaluate_formula ──────────────────────────────────
