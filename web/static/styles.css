@@ -271,17 +271,22 @@ input:focus, select:focus {
 .tab-btn.is-active { color: var(--brand); font-weight: 700; border-bottom-color: var(--brand); }
 .tabpanel { padding: 0 26px 30px; }
 
-/* ── 生成段落 (narrative) cards ───────────────────────────── */
-.narr-card {
-  background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--brand);
-  border-radius: var(--radius-md); padding: 20px 22px; margin-bottom: 14px;
+/* ── 生成段落：整份報告文件（單一容器，內部依段落標題分段） ─── */
+.narr-doc {
+  background: #fff; border: 1px solid var(--line);
+  border-radius: var(--radius-md); padding: 28px 30px;
 }
-.narr-card__head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.narr-card__code { font-size: 13px; font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
-.narr-card__title { font-size: 15px; font-weight: 700; color: var(--heading); }
-.narr-card__tag { margin-left: auto; font-size: 11px; color: var(--dash); font-weight: 600; letter-spacing: 0.05em; }
-.narr-card__text { margin: 0; font-size: 14px; line-height: 1.85; color: var(--text-2); text-align: justify; }
-.narr-card__text--placeholder { color: var(--muted); font-style: italic; }
+.narr-doc__section { margin-bottom: 26px; }
+.narr-doc__section:last-child { margin-bottom: 0; }
+.narr-doc__heading {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line-soft);
+}
+.narr-doc__code { font-size: 14px; font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
+.narr-doc__title { font-size: 16px; font-weight: 700; color: var(--heading); }
+.narr-doc__text { margin: 0 0 10px; font-size: 14px; line-height: 1.85; color: var(--text-2); text-align: justify; }
+.narr-doc__text:last-child { margin-bottom: 0; }
+.narr-doc__text--placeholder { color: var(--muted); font-style: italic; }
 
 .narr-empty {
   background: #fff; border: 1.5px dashed var(--dash); border-radius: var(--radius-md);
@@ -393,5 +398,6 @@ input:focus, select:focus {
   .stage__col, .stage__col--narrow { padding: 32px 16px 40px; }
   .dropzone__actions .btn { flex: 1 1 auto; }
   .tabbar, .tabpanel, .statgrid, .error-banner { margin-left: 12px; margin-right: 12px; }
+  .narr-doc { padding: 20px 18px; }
   .modal { padding: 0; width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
 }
